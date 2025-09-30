@@ -1,4 +1,4 @@
-import { policy, backend } from '../types.bicep'
+import { policy, backend, namedValue } from '../types.bicep'
 
 @description('The name of the API Management resource to be created.')
 param name string
@@ -29,6 +29,15 @@ param backends backend[] = []
 @description('The list of policies to apply to the API Management service.')
 param policies policy[] = []
 
+@description('The name of the Key Vault resource for storing secrets.')
+param keyVaultName string = ''
+
+@description('The list of named values to create in API Management.')
+param namedValues namedValue[] = []
+
+@description('Custom tags to apply to the resources')
+param tags object = {}
+
 /*
  * Resources
 */
@@ -36,9 +45,34 @@ resource insights 'Microsoft.Insights/components@2020-02-02-preview' existing = 
   name: insightsName
 }
 
+// Reference to existing Key Vault
+resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = if (keyVaultName != '') {
+  name: keyVaultName
+}
+
+// Grant APIM access to Key Vault secrets
+resource keyVaultAccessPolicy 'Microsoft.KeyVault/vaults/accessPolicies@2023-07-01' = if (keyVaultName != '') {
+  name: 'add'
+  parent: keyVault
+  properties: {
+    accessPolicies: [
+      {
+        tenantId: subscription().tenantId
+        objectId: apim.identity.principalId
+        permissions: {
+          secrets: ['get', 'list']
+        }
+      }
+    ]
+  }
+}
+
 resource apim 'Microsoft.ApiManagement/service@2024-05-01' = {
   name: name
   location: location
+  identity: {
+    type: 'SystemAssigned'
+  }
   sku: {
     capacity: capacity
     name: skuName
@@ -48,38 +82,25 @@ resource apim 'Microsoft.ApiManagement/service@2024-05-01' = {
     publisherEmail: publisherEmail
     publisherName: publisherName
   }
+  tags: tags
 }
 
 // Named values for OAuth configuration
-resource tenantIdNamedValue 'Microsoft.ApiManagement/service/namedValues@2024-05-01' = {
-  name: 'tenant-id'
-  parent: apim
-  properties: {
-    displayName: 'tenant-id'
-    value: subscription().tenantId
-    secret: false
+resource namedValueResources 'Microsoft.ApiManagement/service/namedValues@2024-05-01' = [
+  for nv in namedValues: {
+    name: nv.name
+    parent: apim
+    properties: {
+      displayName: nv.?displayName ?? nv.name
+      value: (keyVaultName != '' && nv.?keyVaultSecretName != null) ? null : nv.?value
+      keyVault: (keyVaultName != '' && nv.?keyVaultSecretName != null) ? {
+        secretIdentifier: '${keyVault!.properties.vaultUri}secrets/${nv.keyVaultSecretName!}'
+      } : null
+      secret: nv.secret
+    }
+    dependsOn: (keyVaultName != '' && nv.?keyVaultSecretName != null) ? [keyVaultAccessPolicy] : []
   }
-}
-
-resource apiAppIdNamedValue 'Microsoft.ApiManagement/service/namedValues@2024-05-01' = {
-  name: 'api-app-id'
-  parent: apim
-  properties: {
-    displayName: 'api-app-id'
-    value: '11111111-1111-1111-1111-111111111111' // Placeholder - update with actual API App ID
-    secret: false
-  }
-}
-
-resource adminGroupIdNamedValue 'Microsoft.ApiManagement/service/namedValues@2024-05-01' = {
-  name: 'admin-group-id'
-  parent: apim
-  properties: {
-    displayName: 'admin-group-id'
-    value: '22222222-2222-2222-2222-222222222222' // Placeholder - update with actual Admin Group ID
-    secret: false
-  }
-}
+]
 
 resource rule 'Microsoft.ApiManagement/service/policies@2024-05-01' = [
   for p in policies: {
@@ -87,7 +108,7 @@ resource rule 'Microsoft.ApiManagement/service/policies@2024-05-01' = [
     parent: apim
     properties: {
       format: p.format
-      value: p.value
+      value: p.?value ?? '<policies></policies>'
     }
   }
 ]
@@ -129,3 +150,6 @@ resource diagnostics 'Microsoft.ApiManagement/service/diagnostics@2024-05-01' = 
 
 output gatewayUrl string = apim.properties.gatewayUrl
 output portalUrl string = apim.properties.portalUrl
+output name string = apim.name
+output principalId string = apim.identity.principalId
+output keyVaultIntegrationEnabled bool = keyVaultName != ''

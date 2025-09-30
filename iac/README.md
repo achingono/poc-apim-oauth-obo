@@ -43,7 +43,16 @@ The Bicep templates now deploy all required Azure components:
 
 ### 3. APIM API Definitions and OAuth OBO Policies ✅
 
-The `main.bicepparam` file now includes complete APIM configuration:
+The `main.bicepparam` file now includes complete APIM configuration with policies loaded from separate XML files:
+
+#### Policy File Structure
+```
+iac/
+├── policies/
+│   ├── oauth-policy.xml     # OAuth JWT validation and authorization
+│   └── global-policy.xml    # Global CORS policy
+└── main.bicepparam          # References policies via loadTextContent()
+```
 
 #### HTTPBin API Configuration
 ```bicep
@@ -58,6 +67,13 @@ backends: [
         name: 'httpbin-api'
         displayName: 'HTTPBin Test API'
         path: '/httpbin'
+        policies: [
+          {
+            name: 'oauth-policy'
+            format: 'rawxml'
+            value: loadTextContent('./policies/oauth-policy.xml')
+          }
+        ]
         operations: [...]
       }
     ]
@@ -66,13 +82,29 @@ backends: [
 ```
 
 #### OAuth OBO Policy Implementation
-The policy includes:
+The OAuth policy (`oauth-policy.xml`) includes:
 - **JWT Validation**: Validates access tokens against Azure AD
 - **Audience Verification**: Ensures token is for the correct API
 - **Scope Enforcement**: Requires `access_as_user` scope
 - **Group-Based Authorization**: Maps user groups to API roles
 - **Header Injection**: Adds `X-API-Key` and `X-User-Role` headers
 - **Backend Routing**: Forwards to httpbin.org for testing
+
+#### Global Policy Implementation  
+The global policy (`global-policy.xml`) includes:
+- **CORS Configuration**: Allows cross-origin requests for all origins and methods
+
+#### Policy Loading
+Policies are loaded at compile time using Bicep's `loadTextContent()` function:
+```bicep
+policies: [
+  {
+    name: 'oauth-policy'
+    format: 'rawxml'
+    value: loadTextContent('./policies/oauth-policy.xml')
+  }
+]
+```
 
 #### Policy Logic
 ```xml
@@ -87,6 +119,38 @@ The policy includes:
     <scope>access_as_user</scope>
   </required-scopes>
 </validate-jwt>
+```
+
+### 4. Key Vault Integration ✅
+
+APIM is now configured to retrieve OAuth configuration secrets from Azure Key Vault using managed identity:
+
+#### Security Features:
+- **System-Assigned Managed Identity**: APIM uses managed identity to access Key Vault
+- **Key Vault Access Policy**: Grants APIM minimal required permissions (`get`, `list` secrets)
+- **Secure Named Values**: OAuth configuration retrieved from Key Vault at runtime
+- **No Hardcoded Secrets**: All sensitive values stored securely
+
+#### Key Vault Secrets:
+- `api-app-id`: Azure AD API App Registration ID
+- `admin-group-id`: Azure AD Admin Group ID for authorization
+- `client-app-id`: Azure AD Client App Registration ID
+- `tenant-id`: Azure AD Tenant ID
+
+#### APIM Named Values Configuration:
+When Key Vault is available, named values are configured to pull from Key Vault:
+```bicep
+resource apiAppIdNamedValueKV 'Microsoft.ApiManagement/service/namedValues@2024-05-01' = if (keyVaultName != '') {
+  name: 'api-app-id'
+  parent: apim
+  properties: {
+    displayName: 'api-app-id'
+    keyVault: {
+      secretIdentifier: '${keyVault.properties.vaultUri}secrets/api-app-id'
+    }
+    secret: true
+  }
+}
 ```
 
 ## Deployment Instructions
@@ -135,8 +199,31 @@ The Bicep templates cannot directly create Azure AD app registrations. Follow th
    - Configure admin consent for delegated permissions
    - Enable group claims in token configuration
 
-#### Update APIM Named Values
-After creating app registrations, update the APIM named values:
+#### Update Key Vault Secrets
+After creating app registrations, update the Key Vault secrets (recommended approach):
+
+```bash
+# Update API App ID in Key Vault
+az keyvault secret set \
+  --vault-name "kv-{your-resource-name}" \
+  --name "api-app-id" \
+  --value "your-actual-api-app-id"
+
+# Update Admin Group ID in Key Vault
+az keyvault secret set \
+  --vault-name "kv-{your-resource-name}" \
+  --name "admin-group-id" \
+  --value "your-actual-admin-group-id"
+
+# Update Client App ID in Key Vault
+az keyvault secret set \
+  --vault-name "kv-{your-resource-name}" \
+  --name "client-app-id" \
+  --value "your-actual-client-app-id"
+```
+
+#### Alternative: Update APIM Named Values Directly
+If not using Key Vault integration, update the APIM named values directly:
 
 ```bash
 # Update API App ID
@@ -272,14 +359,18 @@ az ad app show --id {api-app-id}
 ```
 iac/
 ├── main.bicep              # Main deployment template
-├── main.bicepparam         # Deployment parameters with OAuth config
+├── main.bicepparam         # Deployment parameters with policy references
 ├── types.bicep             # Type definitions
+├── policies/
+│   ├── oauth-policy.xml    # OAuth JWT validation and authorization policy
+│   └── global-policy.xml   # Global CORS policy
 ├── modules/
-│   ├── apim.bicep          # API Management configuration
+│   ├── apim.bicep          # API Management configuration with Key Vault integration
 │   ├── aks.bicep           # Azure Kubernetes Service
 │   ├── acr.bicep           # Azure Container Registry
 │   ├── insights.bicep      # Application Insights
-│   ├── vault.bicep         # Key Vault (optional)
+│   ├── vault.bicep         # Key Vault configuration
+│   ├── kv-secrets.bicep    # Key Vault secrets population
 │   ├── apim/
 │   │   ├── backend.bicep   # APIM backend configuration
 │   │   ├── service.bicep   # APIM API service configuration

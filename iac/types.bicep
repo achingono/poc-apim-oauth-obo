@@ -76,3 +76,12 @@ type representation = {
     schemaId: string?
     typeName: string?
 }
+
+@export()
+type namedValue = {
+    name: string
+    displayName: string?
+    value: string?
+    secret: bool
+    keyVaultSecretName: string?
+}
