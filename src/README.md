@@ -15,7 +15,7 @@ A .NET 9.0 ASP.NET Core web application that demonstrates OAuth 2.0 On-Behalf-Of
 - OBO token exchange for downstream API calls
 - APIM integration with Bearer token authentication
 
-**Documentation:** See [OAuthOboClient/README.md](OAuthOboClient/README.md)
+**Documentation:** See [client/README.md](client/README.md)
 
 ## Getting Started
 
@@ -30,7 +30,7 @@ A .NET 9.0 ASP.NET Core web application that demonstrates OAuth 2.0 On-Behalf-Of
 
 1. Navigate to the project directory:
    ```bash
-   cd OAuthOboClient
+   cd client
    ```
 
 2. Set up environment variables (see `.env.example`):
@@ -56,7 +56,7 @@ A .NET 9.0 ASP.NET Core web application that demonstrates OAuth 2.0 On-Behalf-Of
 Each project includes a `Dockerfile` and `build.sh` script for containerization:
 
 ```bash
-cd OAuthOboClient
+cd client
 ./build.sh
 ```
 
@@ -96,7 +96,7 @@ HTTPBin Backend
 
 ```
 src/
-├── OAuthOboClient/           # Main .NET web application
+├── client/           # Main .NET web application
 │   ├── Services/             # Token acquisition and API services
 │   ├── Pages/                # Razor Pages (UI)
 │   ├── Dockerfile            # Container definition
@@ -119,7 +119,7 @@ src/
 
 Run the application locally with development settings:
 ```bash
-cd OAuthOboClient
+cd client
 dotnet run --environment Development
 ```
 
@@ -127,7 +127,7 @@ dotnet run --environment Development
 
 Build and run in a container:
 ```bash
-cd OAuthOboClient
+cd client
 docker build -t oauth-obo-client:test .
 docker run -p 8080:8080 \
   -e ENVIRONMENT=Development \
