@@ -1,0 +1,45 @@
+# values-local.yaml
+# Values for local/minikube deployment with client secret authentication
+
+# Environment set to Development for local
+environment: "Development"
+
+# Azure configuration
+azure:
+  tenantId: "your-tenant-id"
+  clientId: "your-client-app-id"
+  apiAppId: "your-api-app-id"
+  scope: "api://your-api-app-id/access_as_user"
+  # Client secret required for local development
+  clientSecret: "your-client-secret"
+
+# APIM configuration
+apim:
+  baseUrl: "https://your-apim-name.azure-api.net/httpbin"
+
+# Workload Identity disabled for local
+workloadIdentity:
+  enabled: false
+  clientId: ""
+
+# ServiceAccount configuration
+serviceAccount:
+  create: true
+  automount: true
+  annotations: {}
+  name: "oauth-obo-sa"
+
+# Image configuration for local development
+image:
+  repository: oauth-obo-client
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+# Resources for local development
+resources:
+  limits:
+    cpu: 200m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
