@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
-namespace OAuthOboClient.Pages;
+namespace client.Pages;
 
 public class PrivacyModel : PageModel
 {

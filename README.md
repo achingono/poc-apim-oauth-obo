@@ -71,7 +71,7 @@ HTTPBin Backend (Test Service)
 │       ├── values-local.yaml # Local development values
 │       └── README.md        # Helm deployment guide
 ├── src/                      # Source code
-│   ├── OAuthOboClient/      # .NET client application
+│   ├── client/      # .NET client application
 │   │   ├── Services/        # Token acquisition and API services
 │   │   ├── Pages/           # Razor Pages UI
 │   │   ├── Dockerfile       # Container definition
@@ -110,7 +110,7 @@ See [iac/README.md](iac/README.md) for detailed infrastructure setup.
 **Local Development:**
 
 ```bash
-cd src/OAuthOboClient
+cd src/client
 
 # Set environment variables
 export ENVIRONMENT=Development
@@ -127,7 +127,7 @@ dotnet run
 
 Navigate to `https://localhost:5001` to access the chat interface.
 
-See [src/OAuthOboClient/README.md](src/OAuthOboClient/README.md) for detailed application documentation.
+See [src/client/README.md](src/client/README.md) for detailed application documentation.
 
 #### 3. Deploy to Kubernetes
 
@@ -190,7 +190,7 @@ The application provides an AI-style chat interface where:
 
 ### Environment Variables
 
-See [src/OAuthOboClient/.env.example](src/OAuthOboClient/.env.example) for a complete list of required environment variables.
+See [src/client/.env.example](src/client/.env.example) for a complete list of required environment variables.
 
 ## Development Workflow
 
@@ -204,7 +204,7 @@ See [src/OAuthOboClient/.env.example](src/OAuthOboClient/.env.example) for a com
 
 ### Container Development
 
-1. Build Docker image: `cd src/OAuthOboClient && ./build.sh`
+1. Build Docker image: `cd src/client && ./build.sh`
 2. Run container locally with environment variables
 3. Test authentication and API calls
 
@@ -265,7 +265,7 @@ See individual README files for component-specific troubleshooting.
 - **Requirements**: [docs/requirements.md](docs/requirements.md) - Detailed POC requirements and design
 - **Infrastructure**: [iac/README.md](iac/README.md) - Infrastructure deployment and configuration
 - **Helm Charts**: [helm/oauth-obo-client/README.md](helm/oauth-obo-client/README.md) - Kubernetes deployment
-- **Application**: [src/OAuthOboClient/README.md](src/OAuthOboClient/README.md) - Application development and usage
+- **Application**: [src/client/README.md](src/client/README.md) - Application development and usage
 
 ## Security Considerations
 

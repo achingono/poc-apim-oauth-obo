@@ -1,9 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using OAuthOboClient.Services;
+using client.Services;
 
-namespace OAuthOboClient.Pages;
+namespace client.Pages;
 
 [Authorize]
 public class IndexModel : PageModel

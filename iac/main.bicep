@@ -140,11 +140,20 @@ module aks 'modules/aks.bicep' = {
   }
 }
 
-module acrAccess 'modules/security/acr-access.bicep' = {
+module existingAcrAccess 'modules/security/acr-access.bicep' = if (registry != null){
+  name: '${deployment().name}--aksAcrAccess'
+  scope: az.resourceGroup(registry!.subscriptionId, registry!.resourceGroup)
+  params: {
+    acrName: registry!.name
+    principalId: aks.outputs.clusterIdentity.objectId
+  }
+}
+
+module newAcrAccess 'modules/security/acr-access.bicep' = if (registry == null){
   name: '${deployment().name}--aksAcrAccess'
   scope: resourceGroup
   params: {
-    acrName: (registry == null) ? acr!.outputs.name : registry!.name
+    acrName: acr!.outputs.name
     principalId: aks.outputs.clusterIdentity.objectId
   }
 }
@@ -174,6 +183,30 @@ module appRegistration './modules/security/application.bicep' = {
   scope: resourceGroup
   params: {
     name: 'appreg${resourceName}'
+    location: resourceGroup.location
     publicFqdn: aks.outputs.publicFqdn
   }
 }
+
+// Outputs for use in deployment and configuration
+output resourceGroupName string = resourceGroup.name
+output acrName string = (registry == null) ? acr!.outputs.name : registry!.name
+output aksName string = aks.outputs.name
+output apimName string = apim.outputs.name
+output keyVaultName string = (vault == null) ? keyVault!.outputs.name : vault!.name
+
+// OAuth App Registration Details
+output clientAppId string = appRegistration.outputs.appId
+output apiAppId string = appRegistration.outputs.apiAppId
+output adminGroupId string = appRegistration.outputs.adminGroupId
+output standardGroupId string = appRegistration.outputs.standardGroupId
+output oauthScope string = appRegistration.outputs.scope
+output clientSecret string = appRegistration.outputs.clientSecret
+
+// Workload Identity Details
+output workloadIdentityName string = workloadIdentity.outputs.name
+output workloadIdentityClientId string = workloadIdentity.outputs.clientId
+
+// AKS Details
+output aksOidcIssuer string = aks.outputs.aksOidcIssuer
+output publicFqdn string = aks.outputs.publicFqdn

@@ -1,7 +1,7 @@
 using System.Text.Json;
 using Microsoft.Identity.Web;
 
-namespace OAuthOboClient.Services;
+namespace client.Services;
 
 public class ApiClient
 {

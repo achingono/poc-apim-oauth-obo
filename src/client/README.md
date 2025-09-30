@@ -73,7 +73,7 @@ export APIM_BASE_URL=https://<your-apim>.azure-api.net/httpbin
 
 2. Run the application:
 ```bash
-cd src/OAuthOboClient
+cd src/client
 dotnet run
 ```
 
@@ -82,7 +82,7 @@ dotnet run
 ## Building Docker Image
 
 ```bash
-cd src/OAuthOboClient
+cd src/client
 docker build -t oauth-obo-client:latest .
 ```
 
@@ -146,7 +146,7 @@ helm install oauth-obo-client ./helm/oauth-obo-client \
 ### Project Structure
 
 ```
-OAuthOboClient/
+client/
 ├── Pages/
 │   ├── Index.cshtml          # Main chat interface
 │   ├── Index.cshtml.cs       # Chat logic and API calls

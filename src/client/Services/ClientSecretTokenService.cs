@@ -1,7 +1,7 @@
 using Microsoft.Identity.Client;
 using Microsoft.Identity.Web;
 
-namespace OAuthOboClient.Services;
+namespace client.Services;
 
 public class ClientSecretTokenService : ITokenAcquisitionService
 {

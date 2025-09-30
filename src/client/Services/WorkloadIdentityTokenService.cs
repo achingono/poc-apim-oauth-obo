@@ -2,7 +2,7 @@ using Azure.Core;
 using Azure.Identity;
 using Microsoft.Identity.Client;
 
-namespace OAuthOboClient.Services;
+namespace client.Services;
 
 public class WorkloadIdentityTokenService : ITokenAcquisitionService
 {

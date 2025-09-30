@@ -10,18 +10,18 @@ fi
 while getopts n:l:s:c:b: flag
 do
     case "${flag}" in
-        n) NAME=${OPTARG};;
-        l) LOCATION=${OPTARG};;
-        s) SUFFIX=${OPTARG};;
+        n) DEPLOYMENT_NAME=${OPTARG};;
+        l) DEPLOYMENT_LOCATION=${OPTARG};;
+        s) DEPLOYMENT_SUFFIX=${OPTARG};;
         c) CLOUD=${OPTARG};;
         b) BUILD=${OPTARG};;
     esac
 done
 
-if [ "$NAME" == "" ] || [ "$LOCATION" == "" ] || [ "$SUFFIX" == "" ]; then
+if [ "$DEPLOYMENT_NAME" == "" ] || [ "$DEPLOYMENT_LOCATION" == "" ] || [ "$DEPLOYMENT_SUFFIX" == "" ]; then
  echo "Syntax: $0 -n <name> -l <location> -s <unique suffix> -c <true|false|0|1> -b <true|false|0|1>"
  exit 1;
-elif [[ $SUFFIX =~ [^a-zA-Z0-9] ]]; then
+elif [[ $DEPLOYMENT_SUFFIX =~ [^a-zA-Z0-9] ]]; then
  echo "Unique suffix must contain ONLY letters and numbers. No special characters."
  echo "Syntax: $0 -n <name> -l <location> -s <unique suffix> -c <true|false|0|1> -b <true|false|0|1>"
  exit 1;
@@ -50,14 +50,14 @@ if [ "$BUILD" == "true" ] || [ "$BUILD" == "1" ]; then
     if [ "$REGISTRY_NAME" == "" ]; then
         docker build -t poc/client:latest \
                     -t poc/client:$SHORT_HASH \
-                    -f ./src/OAuthOboClient/Dockerfile .
+                    -f ./src/client/Dockerfile .
     else 
         docker build -t $REGISTRY_NAME.azurecr.io/poc/client:latest \
                     -t $REGISTRY_NAME.azurecr.io/poc/client:$SHORT_HASH \
-                    -f ./src/OAuthOboClient/Dockerfile .
+                    -f ./src/client/Dockerfile .
 
         echo "Logging in to container registry..."
-        az acr login --name $REGISTRY_NAME --resource-group $REGISTRY_RESOURCEGROUP --subscription $REGISTRY_SUBSCRIPTION
+        az acr login --name $REGISTRY_NAME --resource-group $REGISTRY_RESOURCE_GROUP --subscription $REGISTRY_SUBSCRIPTION
         echo "Pushing images..."
         docker push $REGISTRY_NAME.azurecr.io/poc/client:latest
         docker push $REGISTRY_NAME.azurecr.io/poc/client:$SHORT_HASH
@@ -67,17 +67,17 @@ fi
 if [ "$CLOUD" == "true" ] || [ "$CLOUD" == "1" ]; then
     # provision infrastructure
     az deployment sub create \
-        --name $NAME \
-        --location $LOCATION \
+        --name $DEPLOYMENT_NAME \
+        --location $DEPLOYMENT_LOCATION \
         --template-file ./iac/main.bicep \
         --parameters ./iac/main.bicepparam \
-        --parameters name=$NAME \
-        --parameters location=$LOCATION \
-        --parameters suffix=$SUFFIX 
+        --parameters name=$DEPLOYMENT_NAME \
+        --parameters location=$DEPLOYMENT_LOCATION \
+        --parameters suffix=$DEPLOYMENT_SUFFIX 
 
     # connect kubectl to the AKS cluster
-    RESOURCE_GROUP=$(az deployment sub show --name $NAME --query properties.outputs.resourceGroupName.value -o tsv)
-    CLUSTER_NAME=$(az deployment sub show --name $NAME --query properties.outputs.aksName.value -o tsv)
+    RESOURCE_GROUP=$(az deployment sub show --name $DEPLOYMENT_NAME --query properties.outputs.resourceGroupName.value -o tsv)
+    CLUSTER_NAME=$(az deployment sub show --name $DEPLOYMENT_NAME --query properties.outputs.aksName.value -o tsv)
     az aks get-credentials --resource-group $RESOURCE_GROUP --name $CLUSTER_NAME --overwrite-existing
 else
     # start minikube if not running
@@ -88,17 +88,14 @@ else
 fi
 
 echo "Deploying to Kubernetes..."
-if [ "$DEPLOYMENT" == "" ]; then
-    DEPLOYMENT="${NAME:-poc}-${LOCATION:-eastus}-${SUFFIX:-poc}"
-fi
 
 if [ "$NAMESPACE" == "" ]; then
     NAMESPACE="default"
 fi
 
 # deploy to kubernetes
-if ! helm upgrade --install $DEPLOYMENT ./helm/oauth-obo-client \
-    --values ./helm/oauth-obo-client/values.yaml \
+if ! helm upgrade --install $DEPLOYMENT_NAME ./helm \
+    --values ./helm/values.yaml \
     --values overrides.yaml \
     --namespace $NAMESPACE \
     --create-namespace \

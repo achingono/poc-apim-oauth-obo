@@ -4,7 +4,7 @@ This directory contains the source code for the OAuth OBO (On-Behalf-Of) client 
 
 ## Projects
 
-### OAuthOboClient
+### client
 
 A .NET 9.0 ASP.NET Core web application that demonstrates OAuth 2.0 On-Behalf-Of flow with Azure API Management and Kubernetes Workload Identity.
 

@@ -1,4 +1,4 @@
-namespace OAuthOboClient.Services;
+namespace client.Services;
 
 public interface ITokenAcquisitionService
 {
