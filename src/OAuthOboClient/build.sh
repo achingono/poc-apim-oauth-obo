@@ -1,4 +1,6 @@
 #!/bin/bash
+# Note: Before running this script, make sure it is executable:
+#   chmod +x build.sh
 set -e
 
 # Build script for OAuth OBO Client Docker image
