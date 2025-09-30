@@ -50,6 +50,37 @@ resource apim 'Microsoft.ApiManagement/service@2024-05-01' = {
   }
 }
 
+// Named values for OAuth configuration
+resource tenantIdNamedValue 'Microsoft.ApiManagement/service/namedValues@2024-05-01' = {
+  name: 'tenant-id'
+  parent: apim
+  properties: {
+    displayName: 'tenant-id'
+    value: subscription().tenantId
+    secret: false
+  }
+}
+
+resource apiAppIdNamedValue 'Microsoft.ApiManagement/service/namedValues@2024-05-01' = {
+  name: 'api-app-id'
+  parent: apim
+  properties: {
+    displayName: 'api-app-id'
+    value: '11111111-1111-1111-1111-111111111111' // Placeholder - update with actual API App ID
+    secret: false
+  }
+}
+
+resource adminGroupIdNamedValue 'Microsoft.ApiManagement/service/namedValues@2024-05-01' = {
+  name: 'admin-group-id'
+  parent: apim
+  properties: {
+    displayName: 'admin-group-id'
+    value: '22222222-2222-2222-2222-222222222222' // Placeholder - update with actual Admin Group ID
+    secret: false
+  }
+}
+
 resource rule 'Microsoft.ApiManagement/service/policies@2024-05-01' = [
   for p in policies: {
     name: p.name

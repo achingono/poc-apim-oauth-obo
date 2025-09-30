@@ -23,8 +23,13 @@ resource operationResource 'Microsoft.ApiManagement/service/apis/operations@2024
     displayName: request.displayName
     method: request.method
     urlTemplate: request.urlTemplate
-    requestBody: request.requestBody
-    response: request.response
+    description: request.?description
+    responses: [for response in (request.?responses ?? []): {
+      statusCode: response.statusCode
+      description: response.?description
+      headers: response.?headers ?? []
+      representations: response.?representations ?? []
+    }]
   }
 }
 

@@ -27,8 +27,8 @@ resource apiPolicies 'Microsoft.ApiManagement/service/apis/policies@2024-05-01' 
     name: policy.name
     parent: apiResource
     properties: {
-      value: length(policy.value) > 0 ? policy.value : '<policies></policies>'
-      format: length(policy.value) > 0 ? policy.format : 'xml'
+      value: policy.?value ?? '<policies></policies>'
+      format: policy.format
     }
   }
 ]

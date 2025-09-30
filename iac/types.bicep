@@ -35,7 +35,8 @@ type service = {
 type policy = {
     name: string
     format: 'rawxml' | 'rawxml-link' | 'xml' | 'xml-link'
-    value: string
+    value: string?
+    valueFile: string?
 }
 
 @export() 
@@ -51,10 +52,10 @@ type operation = {
 
 @export() 
 type response = {
+    statusCode: int
     description: string?
     headers: parameter[]?
     representations: representation[]?
-    statusCode: int
 }
 
 @export() 
@@ -74,5 +75,4 @@ type representation = {
     contentType: string
     schemaId: string?
     typeName: string?
-    examples: parameter[]?
 }

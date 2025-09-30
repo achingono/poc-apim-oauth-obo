@@ -1,0 +1,45 @@
+<policies>
+    <inbound>
+        <base />
+        <validate-jwt header-name="Authorization" failed-validation-httpcode="401" failed-validation-error-message="Unauthorized">
+            <openid-config url="https://login.microsoftonline.com/{{tenant-id}}/.well-known/openid-configuration" />
+            <required-claims>
+                <claim name="aud">
+                    <value>api://{{api-app-id}}</value>
+                </claim>
+            </required-claims>
+            <required-scopes>
+                <scope>access_as_user</scope>
+            </required-scopes>
+        </validate-jwt>
+        <choose>
+            <when condition="@(context.Request.Headers.GetValueOrDefault("Authorization","").Contains("Bearer") && context.User.Groups.Any(g => g == "{{admin-group-id}}"))">
+                <set-header name="X-API-Key" exists-action="override">
+                    <value>ADMIN</value>
+                </set-header>
+                <set-header name="X-User-Role" exists-action="override">
+                    <value>admin</value>
+                </set-header>
+            </when>
+            <otherwise>
+                <set-header name="X-API-Key" exists-action="override">
+                    <value>STANDARD</value>
+                </set-header>
+                <set-header name="X-User-Role" exists-action="override">
+                    <value>user</value>
+                </set-header>
+            </otherwise>
+        </choose>
+        <set-backend-service base-url="https://httpbin.org" />
+        <rewrite-uri template="/get" />
+    </inbound>
+    <backend>
+        <base />
+    </backend>
+    <outbound>
+        <base />
+    </outbound>
+    <on-error>
+        <base />
+    </on-error>
+</policies>
