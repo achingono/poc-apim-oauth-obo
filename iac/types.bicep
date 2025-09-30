@@ -85,3 +85,11 @@ type namedValue = {
     secret: bool
     keyVaultSecretName: string?
 }
+
+@description('Source configuration specifying Azure subscription and resource group details')
+@export()
+type source = {
+  name: string
+  subscriptionId: string
+  resourceGroup: string
+}

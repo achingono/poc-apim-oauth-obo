@@ -1,4 +1,4 @@
-import { portal, namedValue } from 'types.bicep'
+import { portal, namedValue, source } from 'types.bicep'
 
 @minLength(3)
 @maxLength(21)
@@ -35,6 +35,8 @@ param suffix string
 param gateway portal
 @description('Named values for API Management configuration.')
 param namedValues namedValue[]
+param registry source?
+param vault source?
 
 // Derived short identifiers (respecting provider length limits) used to build consistent child resource names.
 var shortName = substring(name, 0, min(10, length(name)))
@@ -45,7 +47,7 @@ var resourceName = '${shortName}-${shortSuffix}'
 var processedNamedValues = [for nv in namedValues: {
   name: nv.name
   displayName: nv.?displayName ?? nv.name
-  value: nv.name == 'tenant-id' ? subscription().tenantId : nv.?value
+  value: nv.?value == '<tenant-id>' ? subscription().tenantId : nv.?value
   secret: nv.secret
   keyVaultSecretName: nv.?keyVaultSecretName
 }]
@@ -69,6 +71,46 @@ module insights 'modules/insights.bicep' = {
   }
 }
 
+module acr 'modules/acr.bicep' = if (registry == null) {
+  name: '${deployment().name}--containerRegistry'
+  scope: resourceGroup
+  params: {
+    name: 'acr${resourceName}'
+    location: resourceGroup.location
+    sku: 'Basic'
+    adminUserEnabled: true
+  }
+}
+
+module keyVault 'modules/vault.bicep' = if (vault == null) {
+  name: '${deployment().name}--keyVault'
+  scope: resourceGroup
+  params: {
+    name: 'kv-${resourceName}'
+    location: resourceGroup.location
+    skuFamily: 'A'
+    skuName: 'standard'
+  }
+}
+
+// Populate Key Vault with OAuth configuration secrets
+module newSecrets 'modules/secrets.bicep' =  if (vault == null){
+  name: '${deployment().name}--keyVaultSecrets'
+  scope: resourceGroup
+  params: {
+    keyVaultName: keyVault!.outputs.name
+    namedValues: processedNamedValues
+  }
+}
+module existingSecrets 'modules/secrets.bicep' =  if (vault != null){
+  name: '${deployment().name}--keyVaultSecrets'
+  scope: az.resourceGroup(vault!.subscriptionId, vault!.resourceGroup)
+  params: {
+    keyVaultName: vault!.name
+    namedValues: processedNamedValues
+  }
+}
+
 module apim 'modules/apim.bicep' = {
   name: '${deployment().name}--apiManagement'
   scope: resourceGroup
@@ -82,41 +124,9 @@ module apim 'modules/apim.bicep' = {
     insightsName: insights.outputs.name
     policies: gateway.?policies
     backends: gateway.backends
-    keyVaultName: keyVault.outputs.name
+    keyVaultName: (vault == null) ? keyVault!.outputs.name : vault!.name
     namedValues: processedNamedValues
     tags: {}
-  }
-}
-
-module acr 'modules/acr.bicep' = {
-  name: '${deployment().name}--containerRegistry'
-  scope: resourceGroup
-  params: {
-    name: 'acr${resourceName}'
-    location: resourceGroup.location
-    sku: 'Basic'
-    adminUserEnabled: true
-  }
-}
-
-module keyVault 'modules/vault.bicep' = {
-  name: '${deployment().name}--keyVault'
-  scope: resourceGroup
-  params: {
-    name: 'kv-${resourceName}'
-    location: resourceGroup.location
-    skuFamily: 'A'
-    skuName: 'standard'
-  }
-}
-
-// Populate Key Vault with OAuth configuration secrets
-module kvSecrets 'modules/secrets.bicep' = {
-  name: '${deployment().name}--keyVaultSecrets'
-  scope: resourceGroup
-  params: {
-    keyVaultName: keyVault.outputs.name
-    namedValues: processedNamedValues
   }
 }
 
@@ -134,7 +144,7 @@ module acrAccess 'modules/security/acr-access.bicep' = {
   name: '${deployment().name}--aksAcrAccess'
   scope: resourceGroup
   params: {
-    acrName: acr.outputs.name
+    acrName: (registry == null) ? acr!.outputs.name : registry!.name
     principalId: aks.outputs.clusterIdentity.objectId
   }
 }
