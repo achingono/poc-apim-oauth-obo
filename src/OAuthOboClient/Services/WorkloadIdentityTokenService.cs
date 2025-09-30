@@ -40,7 +40,7 @@ public class WorkloadIdentityTokenService : ITokenAcquisitionService
             .WithAuthority(new Uri(authority))
             .WithClientAssertion(async (AssertionRequestOptions options) =>
             {
-                var tokenRequestContext = new TokenRequestContext(new[] { "https://graph.microsoft.com/.default" });
+                var tokenRequestContext = new TokenRequestContext(options.Scopes, options.TenantId);
                 var token = await _azureCredential.GetTokenAsync(tokenRequestContext, options.CancellationToken);
                 return token.Token;
             })
