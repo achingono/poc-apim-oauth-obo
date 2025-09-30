@@ -1,0 +1,51 @@
+# values-aks.yaml
+# Values for AKS deployment with Azure Workload Identity
+
+# Environment set to Production for AKS
+environment: "Production"
+
+# Azure configuration
+azure:
+  tenantId: "your-tenant-id"
+  clientId: "your-client-app-id"
+  apiAppId: "your-api-app-id"
+  scope: "api://your-api-app-id/access_as_user"
+  # Client secret not needed in AKS with Workload Identity
+  clientSecret: ""
+
+# APIM configuration
+apim:
+  baseUrl: "https://your-apim-name.azure-api.net/httpbin"
+
+# Workload Identity configuration (AKS only)
+workloadIdentity:
+  enabled: true
+  # Managed identity client ID from Azure
+  clientId: "your-managed-identity-client-id"
+
+# ServiceAccount configuration
+serviceAccount:
+  create: true
+  automount: true
+  # Annotations will be added automatically for workload identity
+  annotations: {}
+  name: "oauth-obo-sa"
+
+# Image configuration
+image:
+  repository: your-acr-name.azurecr.io/oauth-obo-client
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+# Pod labels for workload identity
+podLabels:
+  azure.workload.identity/use: "true"
+
+# Resources for AKS
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 250m
+    memory: 256Mi

@@ -1,0 +1,17 @@
+apiVersion: v2
+name: oauth-obo-client
+description: A Helm chart for OAuth 2.0 On-Behalf-Of client with Azure APIM and Kubernetes Workload Identity
+type: application
+version: 0.1.0
+appVersion: "1.0"
+keywords:
+  - oauth
+  - azure
+  - apim
+  - workload-identity
+  - kubernetes
+maintainers:
+  - name: OAuth OBO Team
+home: https://github.com/achingono/poc-apim-oauth-obo
+sources:
+  - https://github.com/achingono/poc-apim-oauth-obo

@@ -1,0 +1,17 @@
+{{- if .Values.service.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "oauth-obo-client.fullname" . }}
+  labels:
+    {{- include "oauth-obo-client.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "oauth-obo-client.selectorLabels" . | nindent 4 }}
+{{- end }}

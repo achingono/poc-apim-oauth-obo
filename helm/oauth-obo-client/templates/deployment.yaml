@@ -1,0 +1,123 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "oauth-obo-client.fullname" . }}
+  labels:
+    {{- include "oauth-obo-client.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "oauth-obo-client.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- if eq .Values.environment "Development" }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- end }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "oauth-obo-client.labels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- if and (eq .Values.environment "Production") .Values.workloadIdentity.enabled }}
+        azure.workload.identity/use: "true"
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "oauth-obo-client.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+      - name: {{ .Chart.Name }}
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 12 }}
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        env:
+        # Environment configuration from ConfigMap
+        - name: ENVIRONMENT
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "oauth-obo-client.configMapName" . }}
+              key: ENVIRONMENT
+        - name: AZURE_TENANT_ID
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "oauth-obo-client.configMapName" . }}
+              key: AZURE_TENANT_ID
+        - name: API_APP_ID
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "oauth-obo-client.configMapName" . }}
+              key: API_APP_ID
+        - name: OAUTH_SCOPE
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "oauth-obo-client.configMapName" . }}
+              key: OAUTH_SCOPE
+        - name: APIM_BASE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "oauth-obo-client.configMapName" . }}
+              key: APIM_BASE_URL
+        {{- if eq .Values.environment "Production" }}
+        # Production (AKS) - Use Workload Identity
+        - name: AZURE_CLIENT_ID
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "oauth-obo-client.configMapName" . }}
+              key: AZURE_CLIENT_ID
+        # Workload Identity token file path (auto-mounted by Azure Workload Identity)
+        - name: AZURE_FEDERATED_TOKEN_FILE
+          value: "/var/run/secrets/azure/tokens/azure-identity-token"
+        {{- else }}
+        # Development (Local) - Use Client Secret
+        - name: AZURE_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "oauth-obo-client.secretName" . }}
+              key: clientId
+        - name: AZURE_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "oauth-obo-client.secretName" . }}
+              key: clientSecret
+        {{- end }}
+        {{- if .Values.service.enabled }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.service.port }}
+          protocol: TCP
+        {{- end }}
+        resources:
+          {{- toYaml .Values.resources | nindent 12 }}
+        {{- with .Values.volumeMounts }}
+        volumeMounts:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+      {{- with .Values.volumes }}
+      volumes:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

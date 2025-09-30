@@ -1,0 +1,56 @@
+Thank you for installing {{ .Chart.Name }}!
+
+Your release is named {{ .Release.Name }}.
+
+Environment: {{ .Values.environment }}
+{{- if eq .Values.environment "Production" }}
+Authentication: Azure Workload Identity (Federated Credentials)
+{{- else }}
+Authentication: Client Secret (Development Only)
+{{- end }}
+
+To learn more about the release, try:
+
+  $ helm status {{ .Release.Name }} -n {{ .Release.Namespace }}
+  $ helm get all {{ .Release.Name }} -n {{ .Release.Namespace }}
+
+To check the status of your deployment:
+
+  $ kubectl get pods -n {{ .Release.Namespace }} -l app.kubernetes.io/name={{ include "oauth-obo-client.name" . }}
+
+To view the logs:
+
+  $ kubectl logs -n {{ .Release.Namespace }} -l app.kubernetes.io/name={{ include "oauth-obo-client.name" . }}
+
+Configuration:
+- APIM Base URL: {{ .Values.apim.baseUrl }}
+- Azure Tenant ID: {{ .Values.azure.tenantId }}
+- Client ID: {{ .Values.azure.clientId }}
+{{- if and .Values.workloadIdentity.enabled (eq .Values.environment "Production") }}
+- Workload Identity Client ID: {{ .Values.workloadIdentity.clientId }}
+{{- end }}
+
+{{- if eq .Values.environment "Production" }}
+
+IMPORTANT: For AKS deployment with Workload Identity:
+1. Ensure your AKS cluster has OIDC issuer and workload identity enabled
+2. Verify the federated credential is configured in Azure AD
+3. The service account should be annotated with the managed identity client ID
+4. Pod labels should include: azure.workload.identity/use: "true"
+
+{{- else }}
+
+IMPORTANT: For local/development deployment:
+1. This deployment uses client secrets stored in Kubernetes secrets
+2. This is NOT suitable for production use
+3. Client secrets should be rotated regularly
+4. Never commit secrets to version control
+
+{{- end }}
+
+For more information, see the chart README:
+  helm/oauth-obo-client/README.md
+
+For troubleshooting, refer to:
+  docs/requirements.md
+  iac/README.md
