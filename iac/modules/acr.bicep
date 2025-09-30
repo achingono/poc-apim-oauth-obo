@@ -12,7 +12,7 @@ param sku string = 'Basic'
 @description('Enable or disable the admin user for the registry.')
 param adminUserEnabled bool = true
 
-resource registry 'Microsoft.ContainerRegistry/registries@2021-06-01-preview' = {
+resource registry 'Microsoft.ContainerRegistry/registries@2023-11-01-preview' = {
   name: name
   location: location
   sku: {

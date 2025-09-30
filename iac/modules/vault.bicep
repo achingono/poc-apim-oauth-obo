@@ -12,7 +12,7 @@ param skuFamily string = 'A'
 @description('Provide a size of your Azure Container Registry.')
 param skuName string = 'standard'
 
-resource keyVault 'Microsoft.KeyVault/vaults@2021-06-01-preview' = {
+resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   name: name
   location: location
   properties: {
@@ -28,3 +28,9 @@ resource keyVault 'Microsoft.KeyVault/vaults@2021-06-01-preview' = {
     publicNetworkAccess: 'Enabled'
   }
 }
+
+@description('Output the name property for later use')
+output name string = keyVault.name
+
+@description('Output the vault URI for later use')
+output vaultUri string = keyVault.properties.vaultUri

@@ -17,7 +17,7 @@ param workspaceName string
 @description('Azure region for both workspace and App Insights (should be colocated).')
 param location string = resourceGroup().location
 
-resource workspace 'Microsoft.OperationalInsights/workspaces@2021-12-01-preview' = {
+resource workspace 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
   name: workspaceName
   location: location
   properties: any({

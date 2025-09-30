@@ -36,7 +36,7 @@ resource insights 'Microsoft.Insights/components@2020-02-02-preview' existing = 
   name: insightsName
 }
 
-resource apim 'Microsoft.ApiManagement/service@2020-12-01' = {
+resource apim 'Microsoft.ApiManagement/service@2024-05-01' = {
   name: name
   location: location
   sku: {
@@ -50,7 +50,7 @@ resource apim 'Microsoft.ApiManagement/service@2020-12-01' = {
   }
 }
 
-resource rule 'Microsoft.ApiManagement/service/policies@2021-12-01-preview' = [
+resource rule 'Microsoft.ApiManagement/service/policies@2024-05-01' = [
   for p in policies: {
     name: p.name
     parent: apim
@@ -71,7 +71,7 @@ module backendModule 'apim/backend.bicep' = [
   }
 ]
 
-resource logger 'Microsoft.ApiManagement/service/loggers@2019-01-01' = {
+resource logger 'Microsoft.ApiManagement/service/loggers@2024-05-01' = {
   parent: apim
   name: insightsName
   properties: {
@@ -83,7 +83,7 @@ resource logger 'Microsoft.ApiManagement/service/loggers@2019-01-01' = {
   }
 }
 
-resource diagnostics 'Microsoft.ApiManagement/service/diagnostics@2019-01-01' = {
+resource diagnostics 'Microsoft.ApiManagement/service/diagnostics@2024-05-01' = {
   parent: apim
   name: 'applicationinsights'
   properties: {

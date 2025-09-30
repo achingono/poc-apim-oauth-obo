@@ -5,7 +5,7 @@ param kubernetesVersion string
 @description('Custom tags to apply to the resources')
 param tags object = {}
 
-resource aks 'Microsoft.ContainerService/managedClusters@2024-02-01' = {
+resource aks 'Microsoft.ContainerService/managedClusters@2025-01-01' = {
   location: location
   name: name
   properties: {

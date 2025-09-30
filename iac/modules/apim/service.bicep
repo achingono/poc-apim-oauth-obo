@@ -6,11 +6,11 @@ param apimName string
 @description('The list of backend services and their operations to deploy into API Management.')
 param endpoint service
 
-resource apim 'Microsoft.ApiManagement/service@2020-12-01' existing = {
+resource apim 'Microsoft.ApiManagement/service@2024-05-01' existing = {
   name: apimName
 }
 
-resource apiResource 'Microsoft.ApiManagement/service/apis@2021-12-01-preview' = {
+resource apiResource 'Microsoft.ApiManagement/service/apis@2024-05-01' = {
   name: endpoint.name
   parent: apim
   properties: {
@@ -22,7 +22,7 @@ resource apiResource 'Microsoft.ApiManagement/service/apis@2021-12-01-preview' =
   }
 }
 
-resource apiPolicies 'Microsoft.ApiManagement/service/apis/policies@2021-12-01-preview' = [
+resource apiPolicies 'Microsoft.ApiManagement/service/apis/policies@2024-05-01' = [
   for (policy, i) in endpoint.policies: {
     name: policy.name
     parent: apiResource

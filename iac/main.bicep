@@ -38,7 +38,7 @@ var resourceName = '${shortName}-${shortSuffix}'
 targetScope = 'subscription'
 
 // Root resource group for all environment-scoped resources.
-resource resourceGroup 'Microsoft.Resources/resourceGroups@2020-06-01' = {
+resource resourceGroup 'Microsoft.Resources/resourceGroups@2024-03-01' = {
   name: 'rg-${resourceName}-${location}'
   location: location
 }
@@ -81,13 +81,24 @@ module acr 'modules/acr.bicep' = {
   }
 }
 
+module keyVault 'modules/vault.bicep' = {
+  name: '${deployment().name}--keyVault'
+  scope: resourceGroup
+  params: {
+    name: 'kv-${resourceName}'
+    location: resourceGroup.location
+    skuFamily: 'A'
+    skuName: 'standard'
+  }
+}
+
 module aks 'modules/aks.bicep' = {
   name: '${deployment().name}--kubernetesCluster'
   scope: resourceGroup
   params: {
     name: 'aks-${resourceName}'
     location: resourceGroup.location
-    kubernetesVersion: '1.28.6' // As of June 2024, the latest supported version in most regions
+    kubernetesVersion: '1.30.6' // Updated to latest supported version as of September 2025
   }
 }
 
