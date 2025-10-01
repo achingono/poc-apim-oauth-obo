@@ -37,6 +37,10 @@ param gateway portal
 param namedValues namedValue[]
 param registry source?
 param vault source?
+@description('Azure AD Client Application ID (created by deploy script)')
+param clientAppId string = '00000000-0000-0000-0000-000000000000'
+@description('Azure AD API Application ID (created by deploy script)')
+param apiAppId string = '11111111-1111-1111-1111-111111111111'
 
 // Derived short identifiers (respecting provider length limits) used to build consistent child resource names.
 var shortName = substring(name, 0, min(10, length(name)))
@@ -75,7 +79,7 @@ module acr 'modules/acr.bicep' = if (registry == null) {
   name: '${deployment().name}--containerRegistry'
   scope: resourceGroup
   params: {
-    name: 'acr${resourceName}'
+    name: 'acr${replace(resourceName, '-', '')}${uniqueString(resourceGroup.id)}'
     location: resourceGroup.location
     sku: 'Basic'
     adminUserEnabled: true
@@ -124,7 +128,11 @@ module apim 'modules/apim.bicep' = {
     insightsName: insights.outputs.name
     policies: gateway.?policies
     backends: gateway.backends
-    keyVaultName: (vault == null) ? keyVault!.outputs.name : vault!.name
+    vault: vault == null ? {
+      name: keyVault!.outputs.name
+      resourceGroup: resourceGroup.name
+      subscriptionId: subscription().subscriptionId
+    } : vault!
     namedValues: processedNamedValues
     tags: {}
   }
@@ -178,30 +186,12 @@ module federatedCredential './modules/security/credential.bicep' = {
   }
 }
 
-module appRegistration './modules/security/application.bicep' = {
-  name: 'appRegistration'
-  scope: resourceGroup
-  params: {
-    name: 'appreg${resourceName}'
-    location: resourceGroup.location
-    publicFqdn: aks.outputs.publicFqdn
-  }
-}
-
 // Outputs for use in deployment and configuration
 output resourceGroupName string = resourceGroup.name
 output acrName string = (registry == null) ? acr!.outputs.name : registry!.name
 output aksName string = aks.outputs.name
 output apimName string = apim.outputs.name
 output keyVaultName string = (vault == null) ? keyVault!.outputs.name : vault!.name
-
-// OAuth App Registration Details
-output clientAppId string = appRegistration.outputs.appId
-output apiAppId string = appRegistration.outputs.apiAppId
-output adminGroupId string = appRegistration.outputs.adminGroupId
-output standardGroupId string = appRegistration.outputs.standardGroupId
-output oauthScope string = appRegistration.outputs.scope
-output clientSecret string = appRegistration.outputs.clientSecret
 
 // Workload Identity Details
 output workloadIdentityName string = workloadIdentity.outputs.name

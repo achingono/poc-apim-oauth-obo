@@ -2,18 +2,18 @@
     <inbound>
         <base />
         <validate-jwt header-name="Authorization" failed-validation-httpcode="401" failed-validation-error-message="Unauthorized">
-            <openid-config url="https://login.microsoftonline.com/{{tenant-id}}/.well-known/openid-configuration" />
+            <openid-config url="https://login.microsoftonline.com/{{tenant_id}}/.well-known/openid-configuration" />
             <required-claims>
                 <claim name="aud">
-                    <value>api://{{api-app-id}}</value>
+                    <value>api://{{api_app_id}}</value>
+                </claim>
+                <claim name="scp" match="any">
+                    <value>access_as_user</value>
                 </claim>
             </required-claims>
-            <required-scopes>
-                <scope>access_as_user</scope>
-            </required-scopes>
         </validate-jwt>
         <choose>
-            <when condition="@(context.Request.Headers.GetValueOrDefault("Authorization","").Contains("Bearer") && context.User.Groups.Any(g => g == "{{admin-group-id}}"))">
+            <when condition="@(context.Request.Headers.GetValueOrDefault("Authorization","").Contains("Bearer") && context.User.Groups.Any(g => g.Id == "{{admin_group_id}}"))">
                 <set-header name="X-API-Key" exists-action="override">
                     <value>ADMIN</value>
                 </set-header>

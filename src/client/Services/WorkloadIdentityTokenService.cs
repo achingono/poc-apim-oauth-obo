@@ -40,7 +40,8 @@ public class WorkloadIdentityTokenService : ITokenAcquisitionService
             .WithAuthority(new Uri(authority))
             .WithClientAssertion(async (AssertionRequestOptions options) =>
             {
-                var tokenRequestContext = new TokenRequestContext(options.Scopes, options.TenantId);
+                // For workload identity, we need to get a token for the Azure AD token exchange scope
+                var tokenRequestContext = new TokenRequestContext(new[] { "api://AzureADTokenExchange/.default" });
                 var token = await _azureCredential.GetTokenAsync(tokenRequestContext, options.CancellationToken);
                 return token.Token;
             })

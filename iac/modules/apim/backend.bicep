@@ -25,5 +25,6 @@ module serviceModule 'service.bicep' = [
     params: {
       apimName: apim.name
       endpoint: s
+    }
   }
-}]
+]

@@ -33,13 +33,11 @@ resource operationResource 'Microsoft.ApiManagement/service/apis/operations@2024
   }
 }
 
-resource operationPolicies 'Microsoft.ApiManagement/service/apis/operations/policies@2024-05-01' = [
-  for (policy, i) in request.?policies ?? []: {
-    name: policy.name
-    parent: operationResource
-    properties: {
-      value: length(policy.value) > 0 ? policy.value : '<policies></policies>'
-      format: length(policy.value) > 0 ? policy.format : 'xml'
-    }
+resource operationPolicy 'Microsoft.ApiManagement/service/apis/operations/policies@2024-05-01' = if (length(request.?policies ?? []) > 0) {
+  name: 'policy'
+  parent: operationResource
+  properties: {
+    value: length(request.?policies ?? []) > 0 ? (request.?policies![0].?value ?? '<policies></policies>') : '<policies></policies>'
+    format: length(request.?policies ?? []) > 0 ? (request.?policies![0].?format ?? 'xml') : 'xml'
   }
-]
+}

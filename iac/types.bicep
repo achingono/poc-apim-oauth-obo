@@ -27,7 +27,7 @@ type service = {
     path: string
     protocols: ('http' | 'https' | 'ws' | 'wss')[]
     isCurrent: bool
-    policies: policy[]
+    policy: policy
     operations: operation[]
 }
 

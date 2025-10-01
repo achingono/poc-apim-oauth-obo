@@ -1,4 +1,4 @@
-import { policy, backend, namedValue } from '../types.bicep'
+import { policy, backend, source, namedValue } from '../types.bicep'
 
 @description('The name of the API Management resource to be created.')
 param name string
@@ -30,7 +30,7 @@ param backends backend[] = []
 param policies policy[] = []
 
 @description('The name of the Key Vault resource for storing secrets.')
-param keyVaultName string = ''
+param vault source
 
 @description('The list of named values to create in API Management.')
 param namedValues namedValue[] = []
@@ -45,27 +45,6 @@ resource insights 'Microsoft.Insights/components@2020-02-02-preview' existing = 
   name: insightsName
 }
 
-// Reference to existing Key Vault
-resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = if (keyVaultName != '') {
-  name: keyVaultName
-}
-
-// Grant APIM access to Key Vault secrets
-resource keyVaultAccessPolicy 'Microsoft.KeyVault/vaults/accessPolicies@2023-07-01' = if (keyVaultName != '') {
-  name: 'add'
-  parent: keyVault
-  properties: {
-    accessPolicies: [
-      {
-        tenantId: subscription().tenantId
-        objectId: apim.identity.principalId
-        permissions: {
-          secrets: ['get', 'list']
-        }
-      }
-    ]
-  }
-}
 
 resource apim 'Microsoft.ApiManagement/service@2024-05-01' = {
   name: name
@@ -78,12 +57,21 @@ resource apim 'Microsoft.ApiManagement/service@2024-05-01' = {
     name: skuName
   }
   properties: {
-    virtualNetworkType: 'External'
     publisherEmail: publisherEmail
     publisherName: publisherName
   }
   tags: tags
 }
+
+module keyVaultRoleAssignment './security/keyvault-rbac.bicep' = {
+  name: '${deployment().name}--apimKeyVaultRoleAssignment'
+  scope: resourceGroup(vault.subscriptionId, vault.resourceGroup)
+  params: {
+    keyVaultName: vault.name
+    principalId: apim.identity.principalId
+  }
+}
+
 
 // Named values for OAuth configuration
 resource namedValueResources 'Microsoft.ApiManagement/service/namedValues@2024-05-01' = [
@@ -92,13 +80,12 @@ resource namedValueResources 'Microsoft.ApiManagement/service/namedValues@2024-0
     parent: apim
     properties: {
       displayName: nv.?displayName ?? nv.name
-      value: (keyVaultName != '' && nv.?keyVaultSecretName != null) ? null : nv.?value
-      keyVault: (keyVaultName != '' && nv.?keyVaultSecretName != null) ? {
-        secretIdentifier: '${keyVault!.properties.vaultUri}secrets/${nv.keyVaultSecretName!}'
+      value: (nv.?keyVaultSecretName != null) ? null : nv.?value
+      keyVault: (nv.?keyVaultSecretName != null) ? {
+        secretIdentifier: 'https://${vault.name}${environment().suffixes.keyvaultDns}/secrets/${nv.keyVaultSecretName!}'
       } : null
       secret: nv.secret
     }
-    dependsOn: (keyVaultName != '' && nv.?keyVaultSecretName != null) ? [keyVaultAccessPolicy] : []
   }
 ]
 
@@ -120,6 +107,9 @@ module backendModule 'apim/backend.bicep' = [
       apimName: apim.name
       api: api
     }
+    dependsOn: [
+      namedValueResources
+    ]
   }
 ]
 
@@ -148,8 +138,8 @@ resource diagnostics 'Microsoft.ApiManagement/service/diagnostics@2024-05-01' = 
   }
 }
 
-output gatewayUrl string = apim.properties.gatewayUrl
-output portalUrl string = apim.properties.portalUrl
+output gatewayUrl string = apim.properties.gatewayUrl ?? ''
+output portalUrl string = apim.properties.portalUrl ?? ''
 output name string = apim.name
 output principalId string = apim.identity.principalId
-output keyVaultIntegrationEnabled bool = keyVaultName != ''
+output keyVaultIntegrationEnabled bool = length(filter(namedValues, nv => contains(nv, 'keyVaultSecretName') && nv.?keyVaultSecretName != null && nv.?keyVaultSecretName != '')) > 0

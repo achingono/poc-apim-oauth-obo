@@ -92,7 +92,40 @@ HTTPBin Backend (Test Service)
 
 ### Quick Start
 
-#### 1. Deploy Infrastructure
+The deployment script (`deploy.sh`) provides an automated way to deploy the complete infrastructure and application, including automatic Azure AD app registration creation.
+
+#### Full Deployment (Cloud)
+
+```bash
+# Clone and navigate to the repository
+git clone <repository-url>
+cd poc-apim-oauth-obo
+
+# Authenticate with Azure
+az login
+
+# Deploy everything (infrastructure + app registrations + Kubernetes)
+./deploy.sh -n oauth-obo -l eastus -s poc -c true -b true
+```
+
+This script will:
+1. **Create Azure AD App Registrations**: Automatically creates and configures client and API app registrations
+2. **Deploy Azure Infrastructure**: Provisions APIM, AKS, Key Vault, and other Azure resources using Bicep
+3. **Configure OAuth Permissions**: Sets up the required OAuth scopes and permissions between apps
+4. **Deploy to Kubernetes**: Deploys the .NET client application to AKS with proper configuration
+
+#### Local Development
+
+For local development with minikube:
+
+```bash
+# Start local Kubernetes and deploy application
+./deploy.sh -n oauth-obo -l eastus -s dev -c false -b true
+```
+
+#### Manual Infrastructure Deployment
+
+If you prefer to deploy infrastructure manually:
 
 ```bash
 cd iac
@@ -100,7 +133,9 @@ az login
 az deployment sub create \
   --location eastus \
   --template-file main.bicep \
-  --parameters main.bicepparam
+  --parameters main.bicepparam \
+  --parameters clientAppId=<your-client-app-id> \
+  --parameters apiAppId=<your-api-app-id>
 ```
 
 See [iac/README.md](iac/README.md) for detailed infrastructure setup.

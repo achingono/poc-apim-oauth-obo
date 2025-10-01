@@ -22,16 +22,14 @@ resource apiResource 'Microsoft.ApiManagement/service/apis@2024-05-01' = {
   }
 }
 
-resource apiPolicies 'Microsoft.ApiManagement/service/apis/policies@2024-05-01' = [
-  for (policy, i) in endpoint.policies: {
-    name: policy.name
-    parent: apiResource
-    properties: {
-      value: policy.?value ?? '<policies></policies>'
-      format: policy.format
-    }
+resource apiPolicy 'Microsoft.ApiManagement/service/apis/policies@2024-05-01' = if (endpoint.policy != null) {
+  name: 'policy'
+  parent: apiResource
+  properties: {
+    value: '${endpoint.policy.?value}' == '' ? '<policies></policies>' : endpoint.policy.value!
+    format: '${endpoint.policy.?format}' == '' ? 'xml' : endpoint.policy.format
   }
-]
+}
 
 module operations 'operation.bicep' = [
   for (operation, i) in endpoint.operations: {
