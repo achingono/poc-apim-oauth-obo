@@ -88,37 +88,63 @@ fi
 echo "Deploying to Kubernetes..."
 
 # Determine which values file to use based on deployment target
-if [ "$CLOUD" == "true" ] || [ "$CLOUD" == "1" ]; then
-    HELM_VALUES_ARGS="--values ./helm/values.yaml --values ./helm/values-aks.yaml"
-else
-    HELM_VALUES_ARGS="--values ./helm/values.yaml --values ./helm/values-local.yaml"
-fi
+# Note: Don't set HELM_VALUES_ARGS here, we'll do it after creating overrides
 
 if [ "$NAMESPACE" == "" ]; then
     NAMESPACE="default"
 fi
-REPOSITORY="poc/client:$SHORT_HASH"
-if [ "$REGISTRY_NAME" == "" ]; then
-    REPOSITORY="$REGISTRY_NAME.azurecr.io/$REPOSITORY"
+
+# Get deployment outputs for cloud deployments
+if [ "$CLOUD" == "true" ] || [ "$CLOUD" == "1" ]; then
+    echo "Retrieving deployment outputs..."
+    WORKLOAD_IDENTITY=$(az deployment sub show --name $DEPLOYMENT_NAME --query properties.outputs.workloadIdentityClientId.value -o tsv)
+    GATEWAY_URL=$(az deployment sub show --name $DEPLOYMENT_NAME --query properties.outputs.gatewayUrl.value -o tsv)
+    ACR_NAME=$(az deployment sub show --name $DEPLOYMENT_NAME --query properties.outputs.acrName.value -o tsv)
+    
+    # Build image repository path for AKS
+    COMMIT_HASH=$(git rev-parse HEAD 2>/dev/null || echo "latest")
+    SHORT_HASH=${COMMIT_HASH::8}
+    if [ "$ACR_NAME" != "" ]; then
+        IMAGE_REPOSITORY="$ACR_NAME.azurecr.io/poc/client"
+        IMAGE_TAG="$SHORT_HASH"
+    else
+        IMAGE_REPOSITORY="poc/client"
+        IMAGE_TAG="latest"
+    fi
+else
+    # For local/minikube deployment
+    IMAGE_REPOSITORY="poc/client"
+    IMAGE_TAG="latest"
+    WORKLOAD_IDENTITY=""
+    GATEWAY_URL="https://your-apim-name.azure-api.net/httpbin"
 fi
-WORKLOAD_IDENTITY=$(az deployment sub show --name $DEPLOYMENT_NAME --query properties.outputs.workloadIdentityClientId.value -o tsv)
-GATEWAY_URL=$(az deployment sub show --name $DEPLOYMENT_NAME --query properties.outputs.gatewayUrl.value -o tsv)
+
 # Create values override file with app registration details if they exist
 if [ "$CLIENT_APP_ID" != "" ] && [ "$API_APP_ID" != "" ]; then
     echo "Creating Helm values override with app registration details..."
     cat > app-config-override.yaml <<EOF
+# Complete override to replace all placeholder values
 image:
-  repository: "$REPOSITORY"
-workloadIdentity:
-  # Managed identity client ID from Azure
-  clientId: "$WORKLOAD_IDENTITY"
-apim:
-  baseUrl: "$GATEWAY_URL"
+  repository: "$IMAGE_REPOSITORY"
+  tag: "$IMAGE_TAG"
+
+# Azure configuration with real values
 azure:
   tenantId: "$TENANT_ID"
   clientId: "$CLIENT_APP_ID"
   apiAppId: "$API_APP_ID"
-  scope: api://$API_APP_ID/access_as_user
+  scope: "api://$API_APP_ID/access_as_user"
+
+# APIM configuration with real values
+apim:
+  baseUrl: "$GATEWAY_URL/httpbin"
+
+# Workload Identity configuration with real values
+workloadIdentity:
+  enabled: true
+  clientId: "$WORKLOAD_IDENTITY"
+
+# Client configuration for ConfigMap/Secret
 client:
   config:
     AZURE_CLIENT_ID: "$CLIENT_APP_ID"
@@ -128,6 +154,20 @@ client:
   secrets:
     AZURE_CLIENT_SECRET: "$CLIENT_SECRET"
 EOF
+fi
+
+# Build Helm values arguments in the correct order
+HELM_VALUES_ARGS="--values ./helm/values.yaml"
+
+# Add environment-specific values
+if [ "$CLOUD" == "true" ] || [ "$CLOUD" == "1" ]; then
+    HELM_VALUES_ARGS="$HELM_VALUES_ARGS --values ./helm/values-aks.yaml"
+else
+    HELM_VALUES_ARGS="$HELM_VALUES_ARGS --values ./helm/values-local.yaml"
+fi
+
+# Add override values (this should be LAST to override everything else)
+if [ "$CLIENT_APP_ID" != "" ] && [ "$API_APP_ID" != "" ]; then
     HELM_VALUES_ARGS="$HELM_VALUES_ARGS --values app-config-override.yaml"
 fi
 
@@ -174,7 +214,9 @@ echo ""
 # Get ingress URL and update app registration redirect URIs
 if [ "$CLIENT_APP_ID" != "" ]; then
     echo "🌐 Configuring ingress and updating app registration..."
-    INGRESS_URL=$(get_ingress_url "$DEPLOYMENT_NAME" "$NAMESPACE" "$CLOUD")
+    # The ingress name follows Helm's fullname pattern: <release-name>-<chart-name>
+    INGRESS_NAME="$DEPLOYMENT_NAME-oauth-obo-client"
+    INGRESS_URL=$(get_ingress_url "$INGRESS_NAME" "$NAMESPACE" "$CLOUD")
     if [ $? -eq 0 ] && [ "$INGRESS_URL" != "" ]; then
         echo "✓ Ingress URL: $INGRESS_URL"
         
