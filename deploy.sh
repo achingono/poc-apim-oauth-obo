@@ -65,53 +65,60 @@ source ./scripts/functions.sh
 create_app_registrations
 
 if [ "$BUILD" == "true" ] || [ "$BUILD" == "1" ]; then
-    build_and_push_images
+   build_and_push_images
 fi
 
 if [ "$CLOUD" == "true" ] || [ "$CLOUD" == "1" ]; then
-    echo "Deploying to Azure..."
-    # provision infrastructure
-    az deployment sub create \
-        --name $DEPLOYMENT_NAME \
-        --location $DEPLOYMENT_LOCATION \
-        --template-file ./iac/main.bicep \
-        --parameters ./iac/main.bicepparam \
-        --parameters name=$DEPLOYMENT_NAME \
-        --parameters location=$DEPLOYMENT_LOCATION \
-        --parameters suffix=$DEPLOYMENT_SUFFIX \
-        --parameters clientAppId=$CLIENT_APP_ID \
-        --parameters apiAppId=$API_APP_ID
-
-    # connect kubectl to the AKS cluster
-    echo "Configuring kubectl to connect to AKS cluster..."
-    RESOURCE_GROUP=$(az deployment sub show --name $DEPLOYMENT_NAME --query properties.outputs.resourceGroupName.value -o tsv)
-    if [ "$RESOURCE_GROUP" == "" ]; then
-        RESOURCE_GROUP="rg-${DEPLOYMENT_NAME:0:10}-${DEPLOYMENT_SUFFIX:0:24}-$DEPLOYMENT_LOCATION"
-    fi
-    CLUSTER_NAME=$(az deployment sub show --name $DEPLOYMENT_NAME --query properties.outputs.aksName.value -o tsv)
-    if [ "$CLUSTER_NAME" == "" ]; then
-        CLUSTER_NAME="aks-${DEPLOYMENT_NAME:0:10}-${DEPLOYMENT_SUFFIX:0:24}"
-    fi
-    echo "AKS Cluster: $CLUSTER_NAME in Resource Group: $RESOURCE_GROUP"
-    az aks get-credentials --resource-group $RESOURCE_GROUP --name $CLUSTER_NAME --overwrite-existing
+    # Provision Azure infrastructure
+    provision_infrastructure
+    
+    # Enable AKS ingress addon
+    enable_aks_ingress "$RESOURCE_GROUP" "$CLUSTER_NAME"
 else
     # start minikube if not running
     if ! minikube status &> /dev/null; then
         echo "Starting minikube..."
         minikube start --driver=docker
     fi
+    
+    # Enable minikube ingress
+    enable_minikube_ingress
 fi
 
 echo "Deploying to Kubernetes..."
 
+# Determine which values file to use based on deployment target
+if [ "$CLOUD" == "true" ] || [ "$CLOUD" == "1" ]; then
+    HELM_VALUES_ARGS="--values ./helm/values.yaml --values ./helm/values-aks.yaml"
+else
+    HELM_VALUES_ARGS="--values ./helm/values.yaml --values ./helm/values-local.yaml"
+fi
+
 if [ "$NAMESPACE" == "" ]; then
     NAMESPACE="default"
 fi
-
+REPOSITORY="poc/client:$SHORT_HASH"
+if [ "$REGISTRY_NAME" == "" ]; then
+    REPOSITORY="$REGISTRY_NAME.azurecr.io/$REPOSITORY"
+fi
+WORKLOAD_IDENTITY=$(az deployment sub show --name $DEPLOYMENT_NAME --query properties.outputs.workloadIdentityClientId.value -o tsv)
+GATEWAY_URL=$(az deployment sub show --name $DEPLOYMENT_NAME --query properties.outputs.gatewayUrl.value -o tsv)
 # Create values override file with app registration details if they exist
 if [ "$CLIENT_APP_ID" != "" ] && [ "$API_APP_ID" != "" ]; then
     echo "Creating Helm values override with app registration details..."
     cat > app-config-override.yaml <<EOF
+image:
+  repository: "$REPOSITORY"
+workloadIdentity:
+  # Managed identity client ID from Azure
+  clientId: "$WORKLOAD_IDENTITY"
+apim:
+  baseUrl: "$GATEWAY_URL"
+azure:
+  tenantId: "$TENANT_ID"
+  clientId: "$CLIENT_APP_ID"
+  apiAppId: "$API_APP_ID"
+  scope: api://$API_APP_ID/access_as_user
 client:
   config:
     AZURE_CLIENT_ID: "$CLIENT_APP_ID"
@@ -121,9 +128,7 @@ client:
   secrets:
     AZURE_CLIENT_SECRET: "$CLIENT_SECRET"
 EOF
-    HELM_VALUES_ARGS="--values ./helm/values.yaml --values app-config-override.yaml"
-else
-    HELM_VALUES_ARGS="--values ./helm/values.yaml"
+    HELM_VALUES_ARGS="$HELM_VALUES_ARGS --values app-config-override.yaml"
 fi
 
 # Add overrides.yaml if it exists
@@ -165,6 +170,26 @@ fi
 echo ""
 echo "🎉 Deployment completed successfully!"
 echo ""
+
+# Get ingress URL and update app registration redirect URIs
+if [ "$CLIENT_APP_ID" != "" ]; then
+    echo "🌐 Configuring ingress and updating app registration..."
+    INGRESS_URL=$(get_ingress_url "$DEPLOYMENT_NAME" "$NAMESPACE" "$CLOUD")
+    if [ $? -eq 0 ] && [ "$INGRESS_URL" != "" ]; then
+        echo "✓ Ingress URL: $INGRESS_URL"
+        
+        # Update app registration redirect URIs
+        update_app_registration_redirects "$CLIENT_APP_ID" "$INGRESS_URL"
+        
+        echo ""
+        echo "🔗 Application Access:"
+        echo "   URL: $INGRESS_URL"
+    else
+        echo "⚠ Warning: Could not determine ingress URL"
+        echo "  You may need to manually configure redirect URIs"
+    fi
+    echo ""
+fi
 
 if [ "$CLIENT_APP_ID" != "" ] && [ "$API_APP_ID" != "" ]; then
     echo "📋 App Registration Details:"

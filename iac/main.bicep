@@ -37,10 +37,6 @@ param gateway portal
 param namedValues namedValue[]
 param registry source?
 param vault source?
-@description('Azure AD Client Application ID (created by deploy script)')
-param clientAppId string = '00000000-0000-0000-0000-000000000000'
-@description('Azure AD API Application ID (created by deploy script)')
-param apiAppId string = '11111111-1111-1111-1111-111111111111'
 
 // Derived short identifiers (respecting provider length limits) used to build consistent child resource names.
 var shortName = substring(name, 0, min(10, length(name)))
@@ -200,3 +196,6 @@ output workloadIdentityClientId string = workloadIdentity.outputs.clientId
 // AKS Details
 output aksOidcIssuer string = aks.outputs.aksOidcIssuer
 output publicFqdn string = aks.outputs.publicFqdn
+
+// APIM Details
+output gatewayUrl string = apim.outputs.gatewayUrl

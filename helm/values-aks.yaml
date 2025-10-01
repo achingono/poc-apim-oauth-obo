@@ -41,6 +41,25 @@ image:
 podLabels:
   azure.workload.identity/use: "true"
 
+# Service configuration for AKS
+service:
+  enabled: true
+  type: ClusterIP
+  port: 80
+
+# Ingress configuration for AKS
+ingress:
+  enabled: true
+  className: "webapprouting.kubernetes.azure.com"
+  annotations:
+    kubernetes.io/ingress.class: webapprouting.kubernetes.azure.com
+  hosts:
+    - host: ""  # Will be set dynamically during deployment
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
 # Resources for AKS
 resources:
   limits:

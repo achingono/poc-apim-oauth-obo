@@ -22,16 +22,16 @@ The main Helm chart for deploying the OAuth OBO client application with support 
 helm install oauth-obo-client ./oauth-obo-client \
   --namespace poc-client \
   --create-namespace \
-  -f oauth-obo-client/values-aks.yaml
+  -f values-aks.yaml
 
 # For local/minikube deployment
 helm install oauth-obo-client ./oauth-obo-client \
   --namespace poc-client \
   --create-namespace \
-  -f oauth-obo-client/values-local.yaml
+  -f values-local.yaml
 ```
 
-For detailed documentation, see [oauth-obo-client/README.md](oauth-obo-client/README.md)
+For detailed documentation, see [README.md](README.md)
 
 ## Prerequisites
 
@@ -44,7 +44,7 @@ For detailed documentation, see [oauth-obo-client/README.md](oauth-obo-client/RE
 ```
 helm/
 ├── README.md                           # This file
-└── oauth-obo-client/                   # OAuth OBO client chart
+└──                    # OAuth OBO client chart
     ├── Chart.yaml                      # Chart metadata
     ├── README.md                       # Detailed chart documentation
     ├── values.yaml                     # Default values
@@ -82,13 +82,13 @@ See [../iac/README.md](../iac/README.md) for infrastructure deployment instructi
 - ACR for container images
 
 **Steps:**
-1. Update `oauth-obo-client/values-aks.yaml` with your configuration
+1. Update `values-aks.yaml` with your configuration
 2. Install the chart:
    ```bash
    helm install oauth-obo-client ./oauth-obo-client \
      --namespace poc-client \
      --create-namespace \
-     -f oauth-obo-client/values-aks.yaml
+     -f values-aks.yaml
    ```
 
 **Authentication:** Azure Workload Identity with federated credentials (no client secrets)
@@ -101,13 +101,13 @@ See [../iac/README.md](../iac/README.md) for infrastructure deployment instructi
 - Access to APIM endpoint
 
 **Steps:**
-1. Update `oauth-obo-client/values-local.yaml` with your configuration
+1. Update `values-local.yaml` with your configuration
 2. Install the chart:
    ```bash
    helm install oauth-obo-client ./oauth-obo-client \
      --namespace poc-client \
      --create-namespace \
-     -f oauth-obo-client/values-local.yaml
+     -f values-local.yaml
    ```
 
 **Authentication:** Client ID + Client Secret (stored in Kubernetes Secret)
@@ -125,12 +125,12 @@ helm lint oauth-obo-client
 ```bash
 # Test AKS configuration
 helm template oauth-obo-client ./oauth-obo-client \
-  -f oauth-obo-client/values-aks.yaml \
+  -f values-aks.yaml \
   --namespace poc-client
 
 # Test local configuration
 helm template oauth-obo-client ./oauth-obo-client \
-  -f oauth-obo-client/values-local.yaml \
+  -f values-local.yaml \
   --namespace poc-client
 ```
 
@@ -152,7 +152,7 @@ helm lint oauth-obo-client
 helm install oauth-obo-client ./oauth-obo-client \
   --namespace poc-client \
   --dry-run --debug \
-  -f oauth-obo-client/values-aks.yaml
+  -f values-aks.yaml
 ```
 
 ### Deployment Issues

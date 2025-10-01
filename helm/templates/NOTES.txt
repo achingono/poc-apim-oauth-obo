@@ -22,6 +22,42 @@ To view the logs:
 
   $ kubectl logs -n {{ .Release.Namespace }} -l app.kubernetes.io/name={{ include "oauth-obo-client.name" . }}
 
+{{- if .Values.ingress.enabled }}
+{{- range .Values.ingress.hosts }}
+To access the application:
+{{- if .host }}
+  URL: http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .host }}{{ range .paths }}{{ .path }}{{ end }}
+{{- if eq $.Values.environment "Development" }}
+
+NOTE: For local development, add this to your /etc/hosts file:
+  $(minikube ip) {{ .host }}
+{{- end }}
+{{- else }}
+  URL: http{{ if $.Values.ingress.tls }}s{{ end }}://<external-ip>{{ range .paths }}{{ .path }}{{ end }}
+  
+  Get external IP with:
+  $ kubectl get ingress {{ include "oauth-obo-client.fullname" $ }} -n {{ $.Release.Namespace }}
+{{- end }}
+{{- end }}
+{{- else if .Values.service.enabled }}
+To access the application:
+{{- if contains "NodePort" .Values.service.type }}
+  export NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "oauth-obo-client.fullname" . }})
+  export NODE_IP=$(kubectl get nodes --namespace {{ .Release.Namespace }} -o jsonpath="{.items[0].status.addresses[0].address}")
+  echo http://$NODE_IP:$NODE_PORT
+{{- else if contains "LoadBalancer" .Values.service.type }}
+  NOTE: It may take a few minutes for the LoadBalancer IP to be available.
+        You can watch the status by running 'kubectl get --namespace {{ .Release.Namespace }} svc -w {{ include "oauth-obo-client.fullname" . }}'
+  export SERVICE_IP=$(kubectl get svc --namespace {{ .Release.Namespace }} {{ include "oauth-obo-client.fullname" . }} --template "{{"{{ range (index .status.loadBalancer.ingress 0) }}{{.}}{{ end }}"}}")
+  echo http://$SERVICE_IP:{{ .Values.service.port }}
+{{- else if contains "ClusterIP" .Values.service.type }}
+  export POD_NAME=$(kubectl get pods --namespace {{ .Release.Namespace }} -l "app.kubernetes.io/name={{ include "oauth-obo-client.name" . }},app.kubernetes.io/instance={{ .Release.Name }}" -o jsonpath="{.items[0].metadata.name}")
+  export CONTAINER_PORT=$(kubectl get pod --namespace {{ .Release.Namespace }} $POD_NAME -o jsonpath="{.spec.containers[0].ports[0].containerPort}")
+  echo "Visit http://127.0.0.1:8080 to use your application"
+  kubectl --namespace {{ .Release.Namespace }} port-forward $POD_NAME 8080:$CONTAINER_PORT
+{{- end }}
+{{- end }}
+
 Configuration:
 - APIM Base URL: {{ .Values.apim.baseUrl }}
 - Azure Tenant ID: {{ .Values.azure.tenantId }}
@@ -49,7 +85,7 @@ IMPORTANT: For local/development deployment:
 {{- end }}
 
 For more information, see the chart README:
-  helm/oauth-obo-client/README.md
+  helm/README.md
 
 For troubleshooting, refer to:
   docs/requirements.md

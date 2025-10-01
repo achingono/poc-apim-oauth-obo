@@ -94,7 +94,7 @@ The application is designed to be deployed using the Helm chart in the `helm/oau
 
 ```bash
 helm install oauth-obo-client ./helm/oauth-obo-client \
-  -f ./helm/oauth-obo-client/values-aks.yaml \
+  -f ./helm/values-aks.yaml \
   --set azure.tenantId=<tenant-id> \
   --set azure.clientId=<client-id> \
   --set azure.apiAppId=<api-app-id> \
@@ -106,7 +106,7 @@ helm install oauth-obo-client ./helm/oauth-obo-client \
 
 ```bash
 helm install oauth-obo-client ./helm/oauth-obo-client \
-  -f ./helm/oauth-obo-client/values-local.yaml \
+  -f ./helm/values-local.yaml \
   --set azure.tenantId=<tenant-id> \
   --set azure.clientId=<client-id> \
   --set azure.clientSecret=<client-secret> \

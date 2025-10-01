@@ -130,7 +130,7 @@ HTTPBin Backend (Test Service) ✅
 │   ├── policies/            # APIM policy definitions ✅ Fixed validation issues
 │   └── README.md            # Infrastructure deployment guide ✅ Updated
 ├── helm/                     # Kubernetes Helm charts ✅ DEPLOYED
-│   └── oauth-obo-client/    # Client application chart
+│   └──     # Client application chart
 │       ├── templates/       # Kubernetes resource templates
 │       ├── values.yaml      # Default values
 │       ├── values-aks.yaml  # AKS-specific values ✅ Working
@@ -144,7 +144,7 @@ HTTPBin Backend (Test Service) ✅
 │   │   └── README.md        # Application documentation
 │   └── README.md            # Source code overview
 ├── deploy.sh                # ✅ AUTOMATED DEPLOYMENT SCRIPT
-├── cleanup.sh               # ✅ AUTOMATED CLEANUP SCRIPT
+├── ./scripts/cleanup.sh               # ✅ AUTOMATED CLEANUP SCRIPT
 └── README.md                # This file ✅ Updated with success story
 ```
 
@@ -232,7 +232,7 @@ See [src/client/README.md](src/client/README.md) for detailed application docume
 ```bash
 cd helm
 helm install oauth-obo-client ./oauth-obo-client \
-  -f ./oauth-obo-client/values-aks.yaml \
+  -f ./values-aks.yaml \
   --set azure.tenantId=<tenant-id> \
   --set azure.clientId=<client-id> \
   --set azure.apiAppId=<api-app-id> \
@@ -240,7 +240,7 @@ helm install oauth-obo-client ./oauth-obo-client \
   --set workloadIdentity.clientId=<managed-identity-client-id>
 ```
 
-See [helm/oauth-obo-client/README.md](helm/oauth-obo-client/README.md) for detailed Helm deployment guide.
+See [helm/README.md](helm/README.md) for detailed Helm deployment guide.
 
 ## Application UI ✅ **WORKING**
 
@@ -298,6 +298,36 @@ All environment variables are automatically set by the deployment script. For ma
 1. ✅ Deploy to AKS with automated script
 2. ✅ Workload identity configured and functional
 3. ✅ Pod logs show successful token acquisition
+
+### Ingress Configuration ✅ **AUTOMATED**
+
+The deployment automatically configures ingress for both local and cloud environments:
+
+#### AKS (Production) ✅
+- **Ingress Controller**: Azure Web Application Routing (managed NGINX)
+- **Automatic Setup**: Enabled during deployment
+- **External Access**: Azure Load Balancer assigns external IP
+- **OAuth Redirect URIs**: Automatically configured in Azure AD app registration
+
+#### Minikube (Local Development) ✅
+- **Ingress Controller**: NGINX addon
+- **Host**: `local.oauth-obo.dev`
+- **Setup Required**: Add `/etc/hosts` entry (instructions provided by deploy script)
+- **OAuth Redirect URIs**: Automatically configured for local development
+
+#### Test Ingress Deployment
+```bash
+# Test the ingress configuration
+./scripts/test-ingress.sh <deployment-name> <namespace> [cloud]
+
+# Example for local deployment
+./scripts/test-ingress.sh oauth-obo default false
+
+# Example for AKS deployment  
+./scripts/test-ingress.sh oauth-obo default true
+```
+
+See [docs/ingress.md](docs/ingress.md) for detailed ingress configuration and troubleshooting.
 4. ✅ End-to-end OAuth OBO flow validated
 
 ## Testing ✅ **VALIDATED**
@@ -384,10 +414,10 @@ To remove all resources created by the deployment:
 
 ```bash
 # Cleanup Azure resources only
-./cleanup.sh -n oauth-obo -s poc
+././scripts/cleanup.sh -n oauth-obo -s poc
 
 # Cleanup Azure resources AND app registrations  
-./cleanup.sh -n oauth-obo -s poc -a
+././scripts/cleanup.sh -n oauth-obo -s poc -a
 ```
 
 The cleanup script will:
@@ -400,7 +430,7 @@ The cleanup script will:
 
 - **Requirements**: [docs/requirements.md](docs/requirements.md) - Detailed POC requirements and design
 - **Infrastructure**: [iac/README.md](iac/README.md) - ✅ Updated with lessons learned and fixes
-- **Helm Charts**: [helm/oauth-obo-client/README.md](helm/oauth-obo-client/README.md) - Kubernetes deployment
+- **Helm Charts**: [helm/README.md](helm/README.md) - Kubernetes deployment
 - **Application**: [src/client/README.md](src/client/README.md) - Application development and usage
 
 ## Security Implementation ✅ **VALIDATED**
@@ -500,7 +530,7 @@ HTTPBin Backend (Test Service)
 │   ├── policies/            # APIM policy definitions
 │   └── README.md            # Infrastructure deployment guide
 ├── helm/                     # Kubernetes Helm charts
-│   └── oauth-obo-client/    # Client application chart
+│   └──     # Client application chart
 │       ├── templates/       # Kubernetes resource templates
 │       ├── values.yaml      # Default values
 │       ├── values-aks.yaml  # AKS-specific values
@@ -607,7 +637,7 @@ See [src/client/README.md](src/client/README.md) for detailed application docume
 ```bash
 cd helm
 helm install oauth-obo-client ./oauth-obo-client \
-  -f ./oauth-obo-client/values-aks.yaml \
+  -f ./values-aks.yaml \
   --set azure.tenantId=<tenant-id> \
   --set azure.clientId=<client-id> \
   --set azure.apiAppId=<api-app-id> \
@@ -619,7 +649,7 @@ helm install oauth-obo-client ./oauth-obo-client \
 
 ```bash
 helm install oauth-obo-client ./oauth-obo-client \
-  -f ./oauth-obo-client/values-local.yaml \
+  -f ./values-local.yaml \
   --set azure.tenantId=<tenant-id> \
   --set azure.clientId=<client-id> \
   --set azure.clientSecret=<client-secret> \
@@ -627,7 +657,7 @@ helm install oauth-obo-client ./oauth-obo-client \
   --set apim.baseUrl=<apim-base-url>
 ```
 
-See [helm/oauth-obo-client/README.md](helm/oauth-obo-client/README.md) for detailed Helm deployment guide.
+See [helm/README.md](helm/README.md) for detailed Helm deployment guide.
 
 ## Application UI
 
@@ -737,10 +767,10 @@ To remove all resources created by the deployment:
 
 ```bash
 # Cleanup Azure resources only
-./cleanup.sh -n oauth-obo -s poc
+././scripts/cleanup.sh -n oauth-obo -s poc
 
 # Cleanup Azure resources AND app registrations
-./cleanup.sh -n oauth-obo -s poc -a
+././scripts/cleanup.sh -n oauth-obo -s poc -a
 ```
 
 The cleanup script will:
@@ -755,7 +785,7 @@ The cleanup script will:
 
 - **Requirements**: [docs/requirements.md](docs/requirements.md) - Detailed POC requirements and design
 - **Infrastructure**: [iac/README.md](iac/README.md) - Infrastructure deployment and configuration
-- **Helm Charts**: [helm/oauth-obo-client/README.md](helm/oauth-obo-client/README.md) - Kubernetes deployment
+- **Helm Charts**: [helm/README.md](helm/README.md) - Kubernetes deployment
 - **Application**: [src/client/README.md](src/client/README.md) - Application development and usage
 
 ## Security Considerations

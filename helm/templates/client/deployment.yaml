@@ -96,7 +96,7 @@ spec:
         {{- if .Values.service.enabled }}
         ports:
         - name: http
-          containerPort: {{ .Values.service.port }}
+          containerPort: 8080
           protocol: TCP
         {{- end }}
         resources:

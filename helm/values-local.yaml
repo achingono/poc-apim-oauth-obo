@@ -35,6 +35,26 @@ image:
   pullPolicy: IfNotPresent
   tag: "latest"
 
+# Service configuration for local
+service:
+  enabled: true
+  type: ClusterIP
+  port: 80
+
+# Ingress configuration for minikube
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/use-regex: "true"
+  hosts:
+    - host: local.oauth-obo.dev
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
 # Resources for local development
 resources:
   limits:

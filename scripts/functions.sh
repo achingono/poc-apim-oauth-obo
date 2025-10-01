@@ -173,6 +173,7 @@ build_and_push_images() {
 }    
 
 provision_infrastructure() {
+    echo "Deploying to Azure..."
     # provision infrastructure
     az deployment sub create \
         --name $DEPLOYMENT_NAME \
@@ -181,14 +182,148 @@ provision_infrastructure() {
         --parameters ./iac/main.bicepparam \
         --parameters name=$DEPLOYMENT_NAME \
         --parameters location=$DEPLOYMENT_LOCATION \
-        --parameters suffix=$DEPLOYMENT_SUFFIX \
-        --parameters clientAppId=$CLIENT_APP_ID \
-        --parameters apiAppId=$API_APP_ID \
-        --parameters registry=null \
-        --parameters vault=null
+        --parameters suffix=$DEPLOYMENT_SUFFIX
 
     # connect kubectl to the AKS cluster
+    echo "Configuring kubectl to connect to AKS cluster..."
     RESOURCE_GROUP=$(az deployment sub show --name $DEPLOYMENT_NAME --query properties.outputs.resourceGroupName.value -o tsv)
+    if [ "$RESOURCE_GROUP" == "" ]; then
+        RESOURCE_GROUP="rg-${DEPLOYMENT_NAME:0:10}-${DEPLOYMENT_SUFFIX:0:24}-$DEPLOYMENT_LOCATION"
+    fi
     CLUSTER_NAME=$(az deployment sub show --name $DEPLOYMENT_NAME --query properties.outputs.aksName.value -o tsv)
+    if [ "$CLUSTER_NAME" == "" ]; then
+        CLUSTER_NAME="aks-${DEPLOYMENT_NAME:0:10}-${DEPLOYMENT_SUFFIX:0:24}"
+    fi
+    echo "AKS Cluster: $CLUSTER_NAME in Resource Group: $RESOURCE_GROUP"
     az aks get-credentials --resource-group $RESOURCE_GROUP --name $CLUSTER_NAME --overwrite-existing
+}
+
+# Function to enable minikube ingress
+enable_minikube_ingress() {
+    echo "Attempting to enable minikube ingress addon..."
+    if timeout 30s minikube addons enable ingress; then
+        echo "✓ Ingress addon enabled successfully"
+        
+        # Configure NGINX controller for proper forwarded headers handling
+        echo "Configuring NGINX controller for forwarded headers..."
+        kubectl patch configmap ingress-nginx-controller -n ingress-nginx --patch='{"data":{"use-forwarded-headers":"true","compute-full-forwarded-for":"true","hsts":"false"}}' || echo "⚠ Warning: Could not configure NGINX forwarded headers"
+        
+        # Restart NGINX controller to apply configuration
+        echo "Restarting NGINX controller to apply configuration..."
+        kubectl rollout restart deployment/ingress-nginx-controller -n ingress-nginx || echo "⚠ Warning: Could not restart NGINX controller"
+        kubectl rollout status deployment/ingress-nginx-controller -n ingress-nginx --timeout=60s || echo "⚠ Warning: NGINX controller restart timed out"
+        
+        return 0
+    else
+        echo "⚠ Warning: Failed to enable ingress addon (likely due to network connectivity)"
+        echo "  Continuing with NodePort services only..."
+        return 1
+    fi
+}
+
+# Function to enable AKS ingress (Web Application Routing addon)
+enable_aks_ingress() {
+    local resource_group="$1"
+    local cluster_name="$2"
+    
+    echo "Enabling AKS Web Application Routing addon..."
+    if az aks approuting enable \
+        --resource-group "$resource_group" \
+        --name "$cluster_name" > /dev/null 2>&1; then
+        echo "✓ Web Application Routing addon enabled successfully"
+        
+        # Wait for the ingress controller to be ready
+        echo "Waiting for ingress controller to be ready..."
+        kubectl wait --for=condition=available deployment/nginx -n app-routing-system --timeout=300s || echo "⚠ Warning: Ingress controller readiness check timed out"
+        
+        return 0
+    else
+        echo "⚠ Warning: Failed to enable Web Application Routing addon"
+        echo "  You may need to enable it manually or use a different ingress controller"
+        return 1
+    fi
+}
+
+# Function to get ingress URL
+get_ingress_url() {
+    local deployment_name="$1"
+    local namespace="$2"
+    local is_cloud="$3"
+    
+    if [ "$is_cloud" == "true" ] || [ "$is_cloud" == "1" ]; then
+        # For AKS, get the external IP from the ingress
+        echo "Waiting for AKS ingress to get external IP..." >&2
+        local external_ip=""
+        local attempts=0
+        while [ "$external_ip" == "" ] || [ "$external_ip" == "<pending>" ] && [ $attempts -lt 30 ]; do
+            external_ip=$(kubectl get ingress "$deployment_name" -n "$namespace" -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
+            if [ "$external_ip" == "" ] || [ "$external_ip" == "<pending>" ]; then
+                sleep 10
+                attempts=$((attempts + 1))
+                echo "  Attempt $attempts/30: Waiting for external IP..." >&2
+            fi
+        done
+        
+        if [ "$external_ip" != "" ] && [ "$external_ip" != "<pending>" ]; then
+            echo "https://$external_ip"
+        else
+            echo "Warning: Could not obtain external IP for AKS ingress" >&2
+            return 1
+        fi
+    else
+        # For minikube, use minikube ip with /etc/hosts entry
+        local minikube_ip=$(minikube ip 2>/dev/null)
+        if [ "$minikube_ip" != "" ]; then
+            local host_name="local.oauth-obo.dev"
+            echo "http://$host_name"
+            echo "" >&2
+            echo "Add this entry to your /etc/hosts file:" >&2
+            echo "   $minikube_ip $host_name" >&2
+        else
+            echo "Warning: Could not get minikube IP" >&2
+            return 1
+        fi
+    fi
+}
+
+# Function to update app registration redirect URIs
+update_app_registration_redirects() {
+    local client_app_id="$1"
+    local redirect_url="$2"
+    
+    echo "Updating app registration redirect URIs..."
+    
+    # Add the new redirect URL to web redirects (for OIDC flows)
+    local signin_redirect="$redirect_url/signin-oidc"
+    local signout_redirect="$redirect_url/signout-callback-oidc"
+    
+    # Get current redirect URIs and add new ones
+    local current_redirects=$(az ad app show --id "$client_app_id" --query "web.redirectUris" -o tsv 2>/dev/null | tr '\t' '\n')
+    
+    # Check if redirects already exist
+    if echo "$current_redirects" | grep -q "^$signin_redirect$" && echo "$current_redirects" | grep -q "^$signout_redirect$"; then
+        echo "✓ Redirect URIs already configured"
+        return 0
+    fi
+    
+    # Add new redirect URIs (this will replace existing ones, so we need to include them)
+    local all_redirects="$signin_redirect $signout_redirect"
+    if [ "$current_redirects" != "" ]; then
+        all_redirects="$all_redirects $current_redirects"
+    fi
+    
+    # Update the app registration
+    if az ad app update --id "$client_app_id" \
+        --web-redirect-uris $all_redirects > /dev/null 2>&1; then
+        echo "✓ App registration redirect URIs updated successfully"
+        echo "  Added: $signin_redirect"
+        echo "  Added: $signout_redirect"
+        return 0
+    else
+        echo "⚠ Warning: Failed to update app registration redirect URIs"
+        echo "  Please manually add these URLs to your app registration:"
+        echo "    $signin_redirect"
+        echo "    $signout_redirect"
+        return 1
+    fi
 }
