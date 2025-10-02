@@ -1,8 +1,46 @@
-# App Registration Deployment Script Summary
+# Deployment Script Documentation
+
+## 🎉 **Latest Update: Workload Identity Integration** ✅
+
+**Date**: October 2, 2025  
+**Commit**: 9a6c0bddcdac3fa58867c9afc49f6d874974a895  
+**Status**: **FULLY OPERATIONAL** with certificateless authentication
+
+### New Feature: Federated Credentials Auto-Configuration
+
+The deployment script now automatically configures Azure AD federated credentials for Workload Identity:
+
+```bash
+# Automatic federated credential creation
+configure_federated_credentials() {
+    local resource_group="$1"
+    local cluster_name="$2" 
+    local namespace="${3:-default}"
+    local service_account="${4:-oauth-obo}"
+    
+    # Get AKS OIDC issuer URL
+    local oidc_issuer_url=$(az aks show --resource-group "$resource_group" --name "$cluster_name" --query "oidcIssuerProfile.issuerUrl" -o tsv)
+    
+    # Create federated credential for workload identity
+    az ad app federated-credential create \
+        --id "$CLIENT_APP_ID" \
+        --parameters '{
+            "name": "aks-federated-credential",
+            "issuer": "'$oidc_issuer_url'",
+            "subject": "system:serviceaccount:'$namespace':'$service_account'",
+            "audiences": ["api://AzureADTokenExchange"]
+        }'
+}
+```
+
+**Key Benefits**:
+- ✅ **No Client Secrets**: Eliminates secret storage in Kubernetes
+- ✅ **Automatic Setup**: Federated credentials configured during deployment
+- ✅ **Production Ready**: Certificateless authentication using workload identity tokens
 
 ## Overview
 
-The `deploy-appregistrations.sh` script has been generated to automate the creation of Azure AD app registrations required for the OAuth On-Behalf-Of (OBO) flow proof of concept. This script is executed by the Azure Deployment Script resource in the Bicep template.
+The `deploy.sh` script provides complete automation for deploying the OAuth On-Behalf-Of (OBO) infrastructure with Azure Workload Identity integration.
 
 ## What the Script Creates
 
@@ -14,32 +52,37 @@ The `deploy-appregistrations.sh` script has been generated to automate the creat
 - **Group Claims**: Enabled for access tokens
 - **Service Principal**: Created automatically
 
-### 2. Client App Registration (`{name}-client`)
+### 2. Client App Registration (`{name}-client`) ✅ **Enhanced**
 - **Purpose**: Client application running in AKS/Kubernetes
-- **Type**: Public client with confidential client capabilities
+- **Type**: Public client with workload identity capabilities
 - **Redirect URIs**: 
-  - Local development: `http://localhost:8080/auth/callback`
-  - AKS deployment: `http://{publicFqdn}/auth/callback`
-  - Device code flow: `urn:ietf:wg:oauth:2.0:oob`
+  - Local development: `https://localhost:5001/signin-oidc`
+  - AKS deployment: `https://{ingress-ip}/signin-oidc` (auto-detected)
+  - Callback: `https://{ingress-ip}/signout-callback-oidc`
 - **Permissions**: 
   - API permission to backend API (`access_as_user` scope)
   - Microsoft Graph `User.Read`
-- **Client Secret**: Generated for development use (1-year expiration)
-- **Group Claims**: Enabled for access and ID tokens
+- **Authentication Methods**:
+  - **Production (AKS)**: ✅ Federated credentials with workload identity
+  - **Development**: Client secret (auto-generated)
+- **Federated Credentials**: ✅ Auto-configured for AKS OIDC issuer
 
-### 3. Security Groups
-- **Admin Group**: `{name}-admin-users`
-- **Standard Group**: `{name}-standard-users`
-- Current user automatically added to admin group
+### 3. Workload Identity Configuration ✅ **NEW**
+- **Managed Identity**: Created with proper RBAC permissions
+- **Federated Identity Credential**: Links Kubernetes service account to Azure AD
+- **OIDC Integration**: Configured with AKS OIDC issuer URL
+- **Service Account Mapping**: Maps to Helm-generated service account name
 
-### 4. Permissions Configuration
-- Admin consent granted automatically
-- OAuth2 permission scopes properly configured
-- Required resource access set up for OBO flow
+### 4. Infrastructure Deployment
+- **Azure API Management**: With OAuth policies and Key Vault integration
+- **Azure Kubernetes Service**: With workload identity enabled
+- **Azure Key Vault**: RBAC-based secret management
+- **Azure Container Registry**: For container image storage
+- **Application Insights**: For monitoring and telemetry
 
 ## Script Outputs
 
-The script generates a JSON output that includes:
+The script generates comprehensive output including:
 
 ```json
 {

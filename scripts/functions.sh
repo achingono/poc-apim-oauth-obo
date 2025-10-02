@@ -136,6 +136,73 @@ create_app_registrations() {
     echo "   OAuth Scope: api://$API_APP_ID/access_as_user"
 }
 
+# Function to configure federated credentials for Workload Identity
+configure_federated_credentials() {
+    local resource_group="$1"
+    local cluster_name="$2"
+    local namespace="${3:-default}"
+    local service_account="${4:-workload-identity-sa}"
+    
+    echo "Configuring federated credentials for Workload Identity..."
+    
+    # Get the OIDC issuer URL from the AKS cluster
+    echo "Getting OIDC issuer URL from AKS cluster..."
+    local oidc_issuer_url=$(az aks show --resource-group "$resource_group" --name "$cluster_name" --query "oidcIssuerProfile.issuerUrl" -o tsv)
+    
+    if [ "$oidc_issuer_url" == "" ] || [ "$oidc_issuer_url" == "null" ]; then
+        echo "❌ OIDC issuer not found. Make sure Workload Identity is enabled on the AKS cluster."
+        echo "   You can enable it with: az aks update --resource-group $resource_group --name $cluster_name --enable-oidc-issuer --enable-workload-identity"
+        return 1
+    fi
+    
+    echo "✅ OIDC Issuer URL: $oidc_issuer_url"
+    
+    # Check if federated credential already exists
+    local fed_cred_name="aks-federated-credential"
+    local subject="system:serviceaccount:${namespace}:${service_account}"
+    
+    echo "Checking for existing federated credential..."
+    local existing_cred=$(az ad app federated-credential list --id "$CLIENT_APP_ID" --query "[?name=='$fed_cred_name']" -o tsv)
+    
+    if [ "$existing_cred" != "" ]; then
+        echo "✅ Federated credential already exists: $fed_cred_name"
+        echo "   Updating existing credential..."
+        az ad app federated-credential update \
+            --id "$CLIENT_APP_ID" \
+            --federated-credential-id "$fed_cred_name" \
+            --issuer "$oidc_issuer_url" \
+            --subject "$subject" \
+            --audiences "api://AzureADTokenExchange" > /dev/null 2>&1
+    else
+        echo "Creating federated credential: $fed_cred_name"
+        az ad app federated-credential create \
+            --id "$CLIENT_APP_ID" \
+            --parameters '{
+                "name": "'$fed_cred_name'",
+                "issuer": "'$oidc_issuer_url'",
+                "subject": "'$subject'",
+                "audiences": ["api://AzureADTokenExchange"],
+                "description": "Federated credential for AKS Workload Identity"
+            }' > /dev/null 2>&1
+    fi
+    
+    if [ $? -eq 0 ]; then
+        echo "✅ Federated credential configured successfully"
+        echo "   Name: $fed_cred_name"
+        echo "   Issuer: $oidc_issuer_url"
+        echo "   Subject: $subject"
+        echo "   Audiences: api://AzureADTokenExchange"
+    else
+        echo "❌ Failed to configure federated credential"
+        return 1
+    fi
+    
+    # Export for use in other functions
+    export OIDC_ISSUER_URL="$oidc_issuer_url"
+    export SERVICE_ACCOUNT_NAMESPACE="$namespace"
+    export SERVICE_ACCOUNT_NAME="$service_account"
+}
+
 build_and_push_images() {
     echo "Building container images..."
     COMMIT_HASH=$(git rev-parse HEAD)
@@ -293,11 +360,13 @@ update_app_registration_redirects() {
     
     echo "Updating app registration redirect URIs..."
     
-    # Define redirect URLs
+    # Define redirect URLs based on the provided URL
     local signin_redirect="$redirect_url/signin-oidc"
     local signout_redirect="$redirect_url/signout-callback-oidc"
     
-    # Standard development redirect URIs
+    echo "ℹ️  Configuring redirect URIs for: $redirect_url"
+    
+    # Standard development redirect URIs (these always work with Azure AD)
     local localhost_5000="http://localhost:5000/signin-oidc"
     local localhost_5001="https://localhost:5001/signin-oidc"
     local localhost_8080="http://localhost:8080/signin-oidc"
@@ -308,9 +377,9 @@ update_app_registration_redirects() {
     # Get current redirect URIs
     local current_redirects=$(az ad app show --id "$client_app_id" --query "web.redirectUris" -o json 2>/dev/null)
     
-    # Check if our specific redirect already exists
+    # Check if the main redirect URI already exists
     if echo "$current_redirects" | grep -q "$signin_redirect"; then
-        echo "✓ Redirect URI already configured: $signin_redirect"
+        echo "✓ Primary redirect URI already configured: $signin_redirect"
         return 0
     fi
     
@@ -347,7 +416,18 @@ update_app_registration_redirects() {
         echo "✓ App registration redirect URIs updated successfully"
         echo "  Primary: $signin_redirect"
         echo "  Signout: $signout_redirect"
-        echo "  Development: signin + signout URIs for localhost:5000, 5001, 8080"
+        echo "  Development: localhost ports 5000, 5001, 8080 (signin + signout)"
+        echo ""
+        if [[ "$redirect_url" =~ ^https:// ]]; then
+            echo "🌐 Direct HTTPS access should work:"
+            echo "   URL: $redirect_url"
+            echo "   OAuth: Enabled with forwarded headers"
+        else
+            echo "🔧 For OAuth testing:"
+            echo "   Direct: $redirect_url (if HTTPS forwarding is configured)"
+            echo "   Local: kubectl port-forward service/oauth-obo-oauth-obo-client 8080:80"
+            echo "          Then open: http://localhost:8080"
+        fi
         return 0
     else
         echo "⚠ Warning: Failed to update app registration redirect URIs"

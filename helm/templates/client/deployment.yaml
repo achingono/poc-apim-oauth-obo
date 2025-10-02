@@ -50,11 +50,6 @@ spec:
             configMapKeyRef:
               name: {{ include "oauth-obo-client.configMapName" . }}
               key: ENVIRONMENT
-        - name: AZURE_TENANT_ID
-          valueFrom:
-            configMapKeyRef:
-              name: {{ include "oauth-obo-client.configMapName" . }}
-              key: AZURE_TENANT_ID
         - name: API_APP_ID
           valueFrom:
             configMapKeyRef:
@@ -71,28 +66,26 @@ spec:
               name: {{ include "oauth-obo-client.configMapName" . }}
               key: APIM_BASE_URL
         - name: ASPNETCORE_FORWARDEDHEADERS_ENABLED
+          value: "true"
+        # Azure AD configuration from ConfigMap and Secret
+        - name: AZUREAD__TENANTID
           valueFrom:
             configMapKeyRef:
               name: {{ include "oauth-obo-client.configMapName" . }}
-              key: ASPNETCORE_FORWARDEDHEADERS_ENABLED
-        {{- if eq .Values.environment "Production" }}
-        # Production (AKS) - Use Workload Identity
-        - name: AZURE_CLIENT_ID
+              key: AZURE_TENANT_ID
+        - name: AZUREAD__CLIENTID
           valueFrom:
             configMapKeyRef:
               name: {{ include "oauth-obo-client.configMapName" . }}
               key: AZURE_CLIENT_ID
+        {{- if eq .Values.environment "Production" }}
+        # Production (AKS) - Use Workload Identity
         # Workload Identity token file path (auto-mounted by Azure Workload Identity)
-        - name: AZURE_FEDERATED_TOKEN_FILE
-          value: "/var/run/secrets/azure/tokens/azure-identity-token"
+        - name: AZUREAD__CLIENTCREDENTIALS__0__SOURCETYPE
+          value: "SignedAssertionFilePath"
         {{- else }}
         # Development (Local) - Use Client Secret
-        - name: AZURE_CLIENT_ID
-          valueFrom:
-            secretKeyRef:
-              name: {{ include "oauth-obo-client.secretName" . }}
-              key: clientId
-        - name: AZURE_CLIENT_SECRET
+        - name: AZUREAD__CLIENTSECRET
           valueFrom:
             secretKeyRef:
               name: {{ include "oauth-obo-client.secretName" . }}

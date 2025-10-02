@@ -2,6 +2,60 @@
 
 This guide provides solutions to common issues encountered with the OAuth OBO POC.
 
+## 🎉 Latest Fixes - Workload Identity & OAuth Integration
+
+### 502 Bad Gateway During OAuth Callback (FIXED)
+**Issue**: After successful authentication, users get 502 Bad Gateway error during OAuth callback.
+
+**Root Cause**: nginx proxy buffer size limits. OAuth tokens and session cookies exceed default buffer sizes (4k).
+
+**Solution**: Increase nginx buffer sizes in ingress annotations:
+```yaml
+# Add to ingress annotations
+nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
+nginx.ingress.kubernetes.io/proxy-buffers-number: "8" 
+nginx.ingress.kubernetes.io/proxy-busy-buffers-size: "64k"
+nginx.ingress.kubernetes.io/large-client-header-buffers: "4 32k"
+```
+
+**Diagnosis Commands**:
+```bash
+# Check nginx ingress logs for buffer errors
+kubectl logs -n app-routing-system deployment/nginx --tail=50 | grep "too big header"
+
+# Apply fix immediately
+kubectl patch ingress <ingress-name> --type='merge' -p='{"metadata":{"annotations":{"nginx.ingress.kubernetes.io/proxy-buffer-size":"16k","nginx.ingress.kubernetes.io/proxy-buffers-number":"8","nginx.ingress.kubernetes.io/proxy-busy-buffers-size":"64k","nginx.ingress.kubernetes.io/large-client-header-buffers":"4 32k"}}}'
+```
+
+### Workload Identity Authentication Success ✅
+**Implementation**: Certificateless authentication using federated credentials in AKS.
+
+**Key Components**:
+1. **Federated Credentials**: Configured in Azure AD client app registration
+2. **Microsoft.Identity.Web 3.14.1**: Auto-detects workload identity when no client secret provided
+3. **Workload Identity Token**: Mounted at `/var/run/secrets/azure/tokens/azure-identity-token`
+
+**Verification Commands**:
+```bash
+# Check workload identity token exists
+kubectl exec deployment/<app-name> -- ls -la /var/run/secrets/azure/tokens/
+
+# Verify environment variables
+kubectl exec deployment/<app-name> -- env | grep -E "(AZURE_|AZUREAD__)"
+
+# Check authentication logs
+kubectl logs deployment/<app-name> | grep -E "(Successfully read|Token Acquisition|DefaultCertificateLoader)"
+```
+
+**Environment Variables for Production**:
+```bash
+AZUREAD__CLIENTCREDENTIALS__0__SOURCETYPE=SignedAssertionFilePath
+AZURE_FEDERATED_TOKEN_FILE=/var/run/secrets/azure/tokens/azure-identity-token
+AZURE_CLIENT_ID=<workload-identity-client-id>
+AZUREAD__CLIENTID=<client-app-registration-id>
+AZUREAD__TENANTID=<tenant-id>
+```
+
 ## 🚨 Critical OAuth Issues - Quick Fixes
 
 ### AADSTS500011 Error (Most Common)

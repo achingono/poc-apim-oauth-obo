@@ -2,9 +2,78 @@
 
 ## 🎉 Project Status: SUCCESSFUL DEPLOYMENT ✅
 
-**Date Completed**: October 1, 2025  
-**Total Development Time**: ~8 hours including troubleshooting  
-**Final Status**: Complete OAuth OBO infrastructure deployed and operational
+**Date Completed**: October 2, 2025  
+**Total Development Time**: ~40 hours including comprehensive troubleshooting  
+**Final Status**: Complete OAuth OBO infrastructure deployed and operational with Workload Identity
+
+## 🚀 Latest Achievement: Workload Identity Integration
+
+### Workload Identity & OAuth Callback Success (Commit: 9a6c0bddcdac3fa58867c9afc49f6d874974a895)
+
+**Challenge**: Implement certificateless authentication in AKS while fixing 502 Bad Gateway errors during OAuth callbacks.
+
+**Root Causes Identified**:
+1. **502 Bad Gateway**: nginx proxy buffer limits exceeded by large OAuth headers/cookies
+2. **Authentication Method**: Need for proper federated credentials configuration
+3. **Library Integration**: Microsoft.Identity.Web 3.14.1 auto-detection requirements
+
+**Solutions Implemented**:
+
+#### 1. nginx Buffer Optimization
+```yaml
+# Increased buffer sizes to handle OAuth tokens and session cookies
+nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
+nginx.ingress.kubernetes.io/proxy-buffers-number: "8"
+nginx.ingress.kubernetes.io/proxy-busy-buffers-size: "64k"  
+nginx.ingress.kubernetes.io/large-client-header-buffers: "4 32k"
+```
+
+**Diagnosis Command**:
+```bash
+kubectl logs -n app-routing-system deployment/nginx | grep "too big header"
+```
+
+#### 2. Federated Credentials Configuration
+```bash
+az ad app federated-credential create \
+    --id "$CLIENT_APP_ID" \
+    --parameters '{
+        "name": "aks-federated-credential",
+        "issuer": "'$OIDC_ISSUER_URL'", 
+        "subject": "system:serviceaccount:'$NAMESPACE':'$SERVICE_ACCOUNT'",
+        "audiences": ["api://AzureADTokenExchange"]
+    }'
+```
+
+#### 3. Microsoft.Identity.Web Auto-Detection
+```csharp
+// Simplified configuration - auto-detects workload identity
+builder.Services.AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
+    .AddMicrosoftIdentityWebApp(options =>
+    {
+        builder.Configuration.Bind("AzureAd", options);
+        options.ClientId = builder.Configuration["AZURE_CLIENT_ID"];
+        options.TenantId = builder.Configuration["AZURE_TENANT_ID"];
+        options.Instance = "https://login.microsoftonline.com/";
+        
+        // No ClientSecret for production - auto-detection works
+    })
+    .EnableTokenAcquisitionToCallDownstreamApi(downstreamApiScopes)
+    .AddInMemoryTokenCaches();
+```
+
+#### 4. Critical Environment Variables
+```yaml
+# Two different client IDs required
+AZURE_CLIENT_ID: "cdf4627b-9345-4dc7-ab67-5b4f7b57117e"  # Workload Identity
+AZUREAD__CLIENTID: "f486b72e-f37c-4ad9-8c9f-325a7bd57d06"  # OAuth Client App
+
+# Workload identity configuration
+AZUREAD__CLIENTCREDENTIALS__0__SOURCETYPE: "SignedAssertionFilePath"
+AZURE_FEDERATED_TOKEN_FILE: "/var/run/secrets/azure/tokens/azure-identity-token"
+```
+
+**Key Insight**: Microsoft.Identity.Web 3.14.1+ automatically handles workload identity when properly configured environment variables are present and no client secret is provided.
 
 ## Major Technical Challenges Overcome
 

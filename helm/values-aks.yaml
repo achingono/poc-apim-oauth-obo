@@ -59,6 +59,11 @@ ingress:
     # Forward headers for proper HTTPS handling
     nginx.ingress.kubernetes.io/use-forwarded-headers: "true"
     nginx.ingress.kubernetes.io/proxy-set-headers: "true"
+    # Buffer size configuration for OAuth callbacks (fix for large headers)
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
+    nginx.ingress.kubernetes.io/proxy-buffers-number: "8"
+    nginx.ingress.kubernetes.io/proxy-busy-buffers-size: "64k"
+    nginx.ingress.kubernetes.io/large-client-header-buffers: "4 32k"
     # Set X-Forwarded-Proto header
     nginx.ingress.kubernetes.io/configuration-snippet: |
       more_set_headers "X-Forwarded-Proto: https";

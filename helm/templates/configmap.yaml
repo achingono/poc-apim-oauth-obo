@@ -7,10 +7,7 @@ metadata:
 data:
   ENVIRONMENT: {{ .Values.environment | quote }}
   AZURE_TENANT_ID: {{ .Values.azure.tenantId | quote }}
-  {{- if eq .Values.environment "Production" }}
   AZURE_CLIENT_ID: {{ .Values.azure.clientId | quote }}
-  {{- end }}
   API_APP_ID: {{ .Values.azure.apiAppId | quote }}
   OAUTH_SCOPE: {{ .Values.azure.scope | quote }}
   APIM_BASE_URL: {{ .Values.apim.baseUrl | quote }}
-  ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"

@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.Identity.Web;
 using Microsoft.Identity.Web.UI;
 using client.Services;
+using Azure.Identity;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -26,32 +27,11 @@ var downstreamApiScopes = new[] { $"api://{apiAppId}/{oauthScope}" };
 builder.Services.AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
     .AddMicrosoftIdentityWebApp(options =>
     {
-        builder.Configuration.Bind("AzureAd", options);
-        options.ClientId = builder.Configuration["AZURE_CLIENT_ID"];
-        options.TenantId = builder.Configuration["AZURE_TENANT_ID"];
-        options.Instance = "https://login.microsoftonline.com/";
-        
-        if (!isProduction)
-        {
-            options.ClientSecret = builder.Configuration["AZURE_CLIENT_SECRET"];
-        }
+        builder.Configuration.GetSection("AzureAd").Bind(options);
     })
     .EnableTokenAcquisitionToCallDownstreamApi(downstreamApiScopes)
     .AddInMemoryTokenCaches();
 
-// Register token acquisition service based on environment
-if (isProduction)
-{
-    builder.Services.AddSingleton<ITokenAcquisitionService, WorkloadIdentityTokenService>();
-    builder.Logging.AddConsole().SetMinimumLevel(LogLevel.Information);
-    Console.WriteLine("Using WorkloadIdentityTokenService for AKS production environment");
-}
-else
-{
-    builder.Services.AddSingleton<ITokenAcquisitionService, ClientSecretTokenService>();
-    builder.Logging.AddConsole().SetMinimumLevel(LogLevel.Information);
-    Console.WriteLine("Using ClientSecretTokenService for local development environment");
-}
 
 // Register API client
 builder.Services.AddHttpClient<ApiClient>();

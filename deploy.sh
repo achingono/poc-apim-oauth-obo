@@ -97,6 +97,9 @@ if [ "$CLOUD" == "true" ] || [ "$CLOUD" == "1" ]; then
     
     # Enable AKS ingress addon
     enable_aks_ingress "$RESOURCE_GROUP" "$CLUSTER_NAME"
+    
+    # Configure federated credentials for Workload Identity
+    configure_federated_credentials "$RESOURCE_GROUP" "$CLUSTER_NAME" "$NAMESPACE" "$DEPLOYMENT_NAME"
 else
     # start minikube if not running
     if ! minikube status &> /dev/null; then
@@ -319,14 +322,28 @@ if [ "$CLIENT_APP_ID" != "" ] && [ "$API_APP_ID" != "" ]; then
     
     if [ "$INGRESS_URL" != "" ]; then
         echo "🧪 OAuth Testing Instructions:"
-        echo "   1. Open browser to: $INGRESS_URL"
-        echo "   2. You should be redirected to Azure AD login"
-        echo "   3. After login, consent to the 'Access API as you' permission"
-        echo "   4. You should be redirected back to the application"
+        echo ""
+        if [[ "$INGRESS_URL" =~ ^https:// ]]; then
+            echo "   ✅ Direct HTTPS access should work:"
+            echo "      1. Open: $INGRESS_URL"
+            echo "      2. OAuth flow will work with Azure AD"
+            echo "      3. Forwarded headers are configured for HTTPS"
+            echo ""
+            echo "   🔧 Alternative - Port forwarding:"
+            echo "      1. Run: kubectl port-forward service/oauth-obo-oauth-obo-client 8080:80"
+            echo "      2. Open: http://localhost:8080"
+        else
+            echo "   ⚠️  HTTP URL detected: $INGRESS_URL"
+            echo "      Direct access may not work with Azure AD"
+            echo ""
+            echo "   ✅ Recommended - Use port forwarding:"
+            echo "      1. Run: kubectl port-forward service/oauth-obo-oauth-obo-client 8080:80"
+            echo "      2. Open: http://localhost:8080"
+        fi
         echo ""
         echo "🔧 Troubleshooting:"
-        echo "   - If you get AADSTS errors, check the app registration configuration"
-        echo "   - If pods are not ready, run: kubectl get pods -n $NAMESPACE"
+        echo "   - For HTTPS setup, see: docs/ingress.md"
+        echo "   - If pods are not ready: kubectl get pods -n $NAMESPACE"
         echo "   - To view logs: kubectl logs -l app.kubernetes.io/name=oauth-obo-client -n $NAMESPACE"
         echo ""
     fi
