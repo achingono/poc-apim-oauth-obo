@@ -293,37 +293,70 @@ update_app_registration_redirects() {
     
     echo "Updating app registration redirect URIs..."
     
-    # Add the new redirect URL to web redirects (for OIDC flows)
+    # Define redirect URLs
     local signin_redirect="$redirect_url/signin-oidc"
     local signout_redirect="$redirect_url/signout-callback-oidc"
     
-    # Get current redirect URIs and add new ones
-    local current_redirects=$(az ad app show --id "$client_app_id" --query "web.redirectUris" -o tsv 2>/dev/null | tr '\t' '\n')
+    # Standard development redirect URIs
+    local localhost_5000="http://localhost:5000/signin-oidc"
+    local localhost_5001="https://localhost:5001/signin-oidc"
+    local localhost_8080="http://localhost:8080/signin-oidc"
+    local localhost_5000_signout="http://localhost:5000/signout-callback-oidc"
+    local localhost_5001_signout="https://localhost:5001/signout-callback-oidc"
+    local localhost_8080_signout="http://localhost:8080/signout-callback-oidc"
     
-    # Check if redirects already exist
-    if echo "$current_redirects" | grep -q "^$signin_redirect$" && echo "$current_redirects" | grep -q "^$signout_redirect$"; then
-        echo "✓ Redirect URIs already configured"
+    # Get current redirect URIs
+    local current_redirects=$(az ad app show --id "$client_app_id" --query "web.redirectUris" -o json 2>/dev/null)
+    
+    # Check if our specific redirect already exists
+    if echo "$current_redirects" | grep -q "$signin_redirect"; then
+        echo "✓ Redirect URI already configured: $signin_redirect"
         return 0
     fi
     
-    # Add new redirect URIs (this will replace existing ones, so we need to include them)
-    local all_redirects="$signin_redirect $signout_redirect"
-    if [ "$current_redirects" != "" ]; then
-        all_redirects="$all_redirects $current_redirects"
+    # Build the complete list of redirect URIs
+    local redirect_list=(
+        "$signin_redirect"
+        "$signout_redirect"
+        "$localhost_5000"
+        "$localhost_5001" 
+        "$localhost_8080"
+        "$localhost_5000_signout"
+        "$localhost_5001_signout"
+        "$localhost_8080_signout"
+    )
+    
+    # Add existing redirect URIs if any (to avoid overwriting them)
+    if [ "$current_redirects" != "null" ] && [ "$current_redirects" != "[]" ]; then
+        echo "Preserving existing redirect URIs..."
+        # Parse existing URIs and add them to our list
+        while IFS= read -r line; do
+            if [ "$line" != "" ] && [ "$line" != "null" ]; then
+                redirect_list+=("$line")
+            fi
+        done < <(echo "$current_redirects" | jq -r '.[]?' 2>/dev/null)
     fi
     
+    # Remove duplicates and build final array
+    local unique_redirects=($(printf '%s\n' "${redirect_list[@]}" | sort -u))
+    
     # Update the app registration
+    echo "Updating redirect URIs with ${#unique_redirects[@]} entries..."
     if az ad app update --id "$client_app_id" \
-        --web-redirect-uris $all_redirects > /dev/null 2>&1; then
+        --web-redirect-uris "${unique_redirects[@]}" > /dev/null 2>&1; then
         echo "✓ App registration redirect URIs updated successfully"
-        echo "  Added: $signin_redirect"
-        echo "  Added: $signout_redirect"
+        echo "  Primary: $signin_redirect"
+        echo "  Signout: $signout_redirect"
+        echo "  Development: signin + signout URIs for localhost:5000, 5001, 8080"
         return 0
     else
         echo "⚠ Warning: Failed to update app registration redirect URIs"
         echo "  Please manually add these URLs to your app registration:"
         echo "    $signin_redirect"
         echo "    $signout_redirect"
+        echo "    $localhost_5000 + signout variants"
+        echo "    $localhost_5001 + signout variants"
+        echo "    $localhost_8080 + signout variants"
         return 1
     fi
 }

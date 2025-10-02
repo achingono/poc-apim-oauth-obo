@@ -64,6 +64,29 @@ source ./scripts/functions.sh
 # Create Azure AD app registrations first
 create_app_registrations
 
+# Validate app registrations
+if [ "$CLIENT_APP_ID" != "" ] && [ "$API_APP_ID" != "" ]; then
+    echo "🔍 Validating Azure AD app registrations..."
+    
+    # Check if API app has OAuth scope configured
+    SCOPE_CHECK=$(az ad app show --id "$API_APP_ID" --query "api.oauth2PermissionScopes[?value=='access_as_user'].id" --output tsv 2>/dev/null)
+    if [ "$SCOPE_CHECK" != "" ]; then
+        echo "✓ API app has 'access_as_user' OAuth scope configured"
+    else
+        echo "⚠ Warning: API app may be missing OAuth scope. This could cause authentication issues."
+    fi
+    
+    # Check if client app has permissions to API app
+    PERMISSION_CHECK=$(az ad app permission list --id "$CLIENT_APP_ID" --query "[?resourceAppId=='$API_APP_ID'].resourceAccess[0].id" --output tsv 2>/dev/null)
+    if [ "$PERMISSION_CHECK" != "" ]; then
+        echo "✓ Client app has permissions to API app"
+    else
+        echo "⚠ Warning: Client app may be missing permissions to API app"
+    fi
+else
+    echo "⚠ Warning: App registration IDs not available for validation"
+fi
+
 if [ "$BUILD" == "true" ] || [ "$BUILD" == "1" ]; then
    build_and_push_images
 fi
@@ -133,7 +156,7 @@ azure:
   tenantId: "$TENANT_ID"
   clientId: "$CLIENT_APP_ID"
   apiAppId: "$API_APP_ID"
-  scope: "api://$API_APP_ID/access_as_user"
+  scope: "access_as_user"
 
 # APIM configuration with real values
 apim:
@@ -150,7 +173,7 @@ client:
     AZURE_CLIENT_ID: "$CLIENT_APP_ID"
     AZURE_TENANT_ID: "$TENANT_ID"
     API_APP_ID: "$API_APP_ID"
-    OAUTH_SCOPE: "api://$API_APP_ID/access_as_user"
+    OAUTH_SCOPE: "access_as_user"
   secrets:
     AZURE_CLIENT_SECRET: "$CLIENT_SECRET"
 EOF
@@ -211,6 +234,43 @@ echo ""
 echo "🎉 Deployment completed successfully!"
 echo ""
 
+# Validate deployment
+echo "🔍 Validating deployment..."
+echo "Waiting for pods to be ready..."
+kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=oauth-obo-client -n $NAMESPACE --timeout=300s
+
+if [ $? -eq 0 ]; then
+    echo "✓ Pods are ready"
+    
+    # Check if ConfigMap has all required environment variables
+    echo "Checking ConfigMap configuration..."
+    CLIENT_ID_CHECK=$(kubectl get configmap -n $NAMESPACE -o jsonpath='{.data.AZURE_CLIENT_ID}' 2>/dev/null)
+    TENANT_ID_CHECK=$(kubectl get configmap -n $NAMESPACE -o jsonpath='{.data.AZURE_TENANT_ID}' 2>/dev/null)
+    API_APP_ID_CHECK=$(kubectl get configmap -n $NAMESPACE -o jsonpath='{.data.API_APP_ID}' 2>/dev/null)
+    OAUTH_SCOPE_CHECK=$(kubectl get configmap -n $NAMESPACE -o jsonpath='{.data.OAUTH_SCOPE}' 2>/dev/null)
+    
+    if [ "$CLIENT_ID_CHECK" != "" ] && [ "$TENANT_ID_CHECK" != "" ] && [ "$API_APP_ID_CHECK" != "" ] && [ "$OAUTH_SCOPE_CHECK" == "access_as_user" ]; then
+        echo "✓ ConfigMap has all required environment variables"
+    else
+        echo "⚠ Warning: ConfigMap may be missing required environment variables"
+        echo "  AZURE_CLIENT_ID: $CLIENT_ID_CHECK"
+        echo "  AZURE_TENANT_ID: $TENANT_ID_CHECK"
+        echo "  API_APP_ID: $API_APP_ID_CHECK"
+        echo "  OAUTH_SCOPE: $OAUTH_SCOPE_CHECK"
+    fi
+    
+    # Check pod logs for any startup errors
+    echo "Checking pod logs for startup errors..."
+    POD_NAME=$(kubectl get pods -n $NAMESPACE -l app.kubernetes.io/name=oauth-obo-client -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+    if [ "$POD_NAME" != "" ]; then
+        kubectl logs $POD_NAME -n $NAMESPACE --tail=10 | grep -i "error\|exception\|fail" && echo "⚠ Warning: Found potential errors in pod logs" || echo "✓ No obvious errors in pod logs"
+    fi
+else
+    echo "❌ Pods failed to become ready within timeout"
+    kubectl get pods -n $NAMESPACE -o wide
+    exit 1
+fi
+
 # Get ingress URL and update app registration redirect URIs
 if [ "$CLIENT_APP_ID" != "" ]; then
     echo "🌐 Configuring ingress and updating app registration..."
@@ -223,12 +283,24 @@ if [ "$CLIENT_APP_ID" != "" ]; then
         # Update app registration redirect URIs
         update_app_registration_redirects "$CLIENT_APP_ID" "$INGRESS_URL"
         
+        # Validate the redirect URI was added successfully
+        echo "Validating redirect URI configuration..."
+        REDIRECT_CHECK=$(az ad app show --id "$CLIENT_APP_ID" --query "web.redirectUris[?contains(@, '$INGRESS_URL')]" --output tsv 2>/dev/null)
+        if [ "$REDIRECT_CHECK" != "" ]; then
+            echo "✓ Redirect URI successfully added to app registration"
+        else
+            echo "⚠ Warning: Failed to add redirect URI to app registration"
+        fi
+        
         echo ""
         echo "🔗 Application Access:"
         echo "   URL: $INGRESS_URL"
+        echo "   Status: Ready for OAuth testing"
     else
         echo "⚠ Warning: Could not determine ingress URL"
         echo "  You may need to manually configure redirect URIs"
+        echo "  Run this command to check ingress status:"
+        echo "  kubectl get ingress $INGRESS_NAME -n $NAMESPACE"
     fi
     echo ""
 fi
@@ -244,6 +316,20 @@ if [ "$CLIENT_APP_ID" != "" ] && [ "$API_APP_ID" != "" ]; then
     echo ""
     echo "💾 Configuration saved to: app-config-override.yaml"
     echo ""
+    
+    if [ "$INGRESS_URL" != "" ]; then
+        echo "🧪 OAuth Testing Instructions:"
+        echo "   1. Open browser to: $INGRESS_URL"
+        echo "   2. You should be redirected to Azure AD login"
+        echo "   3. After login, consent to the 'Access API as you' permission"
+        echo "   4. You should be redirected back to the application"
+        echo ""
+        echo "🔧 Troubleshooting:"
+        echo "   - If you get AADSTS errors, check the app registration configuration"
+        echo "   - If pods are not ready, run: kubectl get pods -n $NAMESPACE"
+        echo "   - To view logs: kubectl logs -l app.kubernetes.io/name=oauth-obo-client -n $NAMESPACE"
+        echo ""
+    fi
 fi
 
 duration=$SECONDS
@@ -254,5 +340,12 @@ echo "End time: $(date)"
 if [ -f app-config-override.yaml ]; then
     echo ""
     echo "🧹 Cleaning up temporary configuration files..."
-    rm -f app-config-override.yaml
+    # Only remove if deployment was successful and we have a running pod
+    POD_COUNT=$(kubectl get pods -n $NAMESPACE -l app.kubernetes.io/name=oauth-obo-client --no-headers 2>/dev/null | wc -l)
+    if [ "$POD_COUNT" -gt 0 ]; then
+        rm -f app-config-override.yaml
+        echo "✓ Temporary files cleaned up"
+    else
+        echo "⚠ Keeping app-config-override.yaml for debugging (no running pods found)"
+    fi
 fi
