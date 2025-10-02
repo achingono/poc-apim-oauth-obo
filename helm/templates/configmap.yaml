@@ -13,3 +13,4 @@ data:
   API_APP_ID: {{ .Values.azure.apiAppId | quote }}
   OAUTH_SCOPE: {{ .Values.azure.scope | quote }}
   APIM_BASE_URL: {{ .Values.apim.baseUrl | quote }}
+  ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"

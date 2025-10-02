@@ -70,6 +70,11 @@ spec:
             configMapKeyRef:
               name: {{ include "oauth-obo-client.configMapName" . }}
               key: APIM_BASE_URL
+        - name: ASPNETCORE_FORWARDEDHEADERS_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "oauth-obo-client.configMapName" . }}
+              key: ASPNETCORE_FORWARDEDHEADERS_ENABLED
         {{- if eq .Values.environment "Production" }}
         # Production (AKS) - Use Workload Identity
         - name: AZURE_CLIENT_ID

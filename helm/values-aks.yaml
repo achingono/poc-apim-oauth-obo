@@ -53,6 +53,16 @@ ingress:
   className: "webapprouting.kubernetes.azure.com"
   annotations:
     kubernetes.io/ingress.class: webapprouting.kubernetes.azure.com
+    # Enable SSL redirect and HTTPS forwarding
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    # Forward headers for proper HTTPS handling
+    nginx.ingress.kubernetes.io/use-forwarded-headers: "true"
+    nginx.ingress.kubernetes.io/proxy-set-headers: "true"
+    # Set X-Forwarded-Proto header
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Forwarded-Proto: https";
+      more_set_headers "X-Forwarded-Port: 443";
   hosts:
     - host: ""  # Will be set dynamically during deployment
       paths:
