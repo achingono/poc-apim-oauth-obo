@@ -30,6 +30,18 @@ create_app_registrations() {
         else
             echo "✅ Reusing existing scope: $SCOPE_UUID"
         fi
+        
+        # Ensure optional claims for groups are configured on existing app
+        echo "Updating API app to ensure groups optional claim is configured..."
+        az ad app update --id "$API_APP_ID" \
+            --set groupMembershipClaims="SecurityGroup" \
+            --set optionalClaims.accessToken='[{"name":"groups","source":null,"essential":false,"additionalProperties":[]}]' > /dev/null 2>&1
+        
+        if [ $? -eq 0 ]; then
+            echo "✅ Groups optional claim configured"
+        else
+            echo "⚠️  Warning: Failed to configure groups optional claim"
+        fi
     else
         echo "Creating API app registration: $API_APP_NAME"
         
@@ -57,6 +69,7 @@ create_app_registrations() {
             --set api.oauth2PermissionScopes='[{"id":"'$SCOPE_UUID'","adminConsentDescription":"Allow the application to access the API on behalf of the signed-in user","adminConsentDisplayName":"Access API as user","isEnabled":true,"type":"User","userConsentDescription":"Allow the application to access the API on your behalf","userConsentDisplayName":"Access API as you","value":"access_as_user"}]' \
             --set appRoles='[{"allowedMemberTypes":["User"],"description":"Standard user access","displayName":"User","id":"'$USER_ROLE_UUID'","isEnabled":true,"value":"User"},{"allowedMemberTypes":["User"],"description":"Administrator access","displayName":"Admin","id":"'$ADMIN_ROLE_UUID'","isEnabled":true,"value":"Admin"}]' \
             --set groupMembershipClaims="SecurityGroup" \
+            --set optionalClaims.accessToken='[{"name":"groups","source":null,"essential":false,"additionalProperties":[]}]' \
             --set acceptMappedClaims=true \
             --set accessTokenAcceptedVersion=2 > /dev/null
         
